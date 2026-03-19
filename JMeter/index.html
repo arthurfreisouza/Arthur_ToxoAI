@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login System</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Login/Register Forms -->
+        <div id="auth-section" class="auth-section">
+            <div class="form-container">
+                <div class="form-tabs">
+                    <button class="tab-btn active" onclick="showLogin()">Login</button>
+                    <button class="tab-btn" onclick="showRegister()">Register</button>
+                </div>
+
+                <!-- Login Form -->
+                <form id="login-form" class="auth-form active">
+                    <h2>Welcome Back</h2>
+                    <div class="form-group">
+                        <label for="login-username">Username</label>
+                        <input type="text" id="login-username" placeholder="Enter your username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" placeholder="Enter your password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                    <div id="login-error" class="error-message"></div>
+                </form>
+
+                <!-- Register Form -->
+                <form id="register-form" class="auth-form">
+                    <h2>Create Account</h2>
+                    <div class="form-group">
+                        <label for="register-username">Username</label>
+                        <input type="text" id="register-username" placeholder="Choose a username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" placeholder="your.email@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" placeholder="Create a secure password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Register</button>
+                    <div id="register-error" class="error-message"></div>
+                    <div id="register-success" class="success-message"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- User Dashboard (shown after login) -->
+        <div id="dashboard-section" class="dashboard-section" style="display: none;">
+            <div class="dashboard-container">
+                <h1>User Dashboard</h1>
+                <div class="user-card">
+                    <div class="user-info">
+                        <h2>Welcome, <span id="user-username"></span>!</h2>
+                        <p><strong>Email:</strong> <span id="user-email"></span></p>
+                        <p><strong>User ID:</strong> <span id="user-id"></span></p>
+                        <p><strong>Status:</strong> <span id="user-status" class="status-active">Active</span></p>
+                    </div>
+                    <button onclick="logout()" class="btn btn-logout">Logout</button>
+                </div>
+                <div id="dashboard-error" class="error-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
