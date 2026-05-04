@@ -3,6 +3,7 @@ const API_URL = 'http://localhost:8000';
 
 // DOM Elements
 const authSection = document.getElementById('auth-section');
+const choiceSection = document.getElementById('choice-section');
 const dashboardSection = document.getElementById('dashboard-section');
 const loginForm = document.getElementById('login-form');
 const registerForm = document.getElementById('register-form');
@@ -191,15 +192,28 @@ function displayUserDashboard(user) {
     statusElement.textContent = user.is_active ? 'Active' : 'Inactive';
     statusElement.className = user.is_active ? 'status-active' : 'status-inactive';
 
-    // Hide auth section, show dashboard
+    // Hide auth section, show choice section
     authSection.style.display = 'none';
-    dashboardSection.style.display = 'block';
+    choiceSection.style.display = 'block';
+    dashboardSection.style.display = 'none';
 }
 
 // Show Auth Section
 function showAuthSection() {
     authSection.style.display = 'block';
+    choiceSection.style.display = 'none';
     dashboardSection.style.display = 'none';
+}
+
+// Handle Test Type Selection
+function selectTestType(testType) {
+    const token = localStorage.getItem('token');
+    if (testType === 'HIV') {
+        // Open HIV chat in new tab
+        window.open(`hiv_chat.html?token=${encodeURIComponent(token)}`, '_blank');
+    } else if (testType === 'Cancer') {
+        alert(`Cancer Screening module coming soon!`);
+    }
 }
 
 // Logout

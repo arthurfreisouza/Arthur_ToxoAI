@@ -1,0 +1,328 @@
+name: Create Azure Virtual Machine with Role Assignment
+
+trigger: none
+
+parameters:
+- name: location
+  type: string
+  default: "eastus"
+- name: RESOURCE_GROUP
+  type: string
+  default: "projArthurreis"
+- name: vmName
+  displayName: 'Virtual Machine Name'
+  type: string
+- name: vmSize
+  displayName: 'VM Size'
+  type: string
+  default: 'Standard_B2s'
+- name: adminUsername
+  displayName: 'Admin Username'
+  type: string
+  default: 'azureuser'
+- name: adminPassword
+  displayName: 'Admin Password'
+  type: string
+- name: osType
+  displayName: 'Operating System'
+  type: string
+  default: 'Linux'
+  values:
+  - Linux
+  - Windows
+- name: imagePublisher
+  displayName: 'Image Publisher'
+  type: string
+  default: 'Canonical'
+- name: imageOffer
+  displayName: 'Image Offer'
+  type: string
+  default: '0001-com-ubuntu-server-jammy'
+- name: imageSku
+  displayName: 'Image SKU'
+  type: string
+  default: '22_04-lts-gen2'
+- name: vnetName
+  displayName: 'Virtual Network Name (existing)'
+  type: string
+- name: subnetName
+  displayName: 'Subnet Name (existing)'
+  type: string
+  default: 'default'
+- name: role
+  displayName: 'Role to Assign'
+  type: string
+  default: 'Virtual Machine Contributor'
+- name: principalId
+  displayName: 'Principal ID (Object ID) for Role Assignment'
+  type: string
+
+variables:
+- group: Arthur_VG
+
+stages:
+- stage: CheckResources
+  displayName: 'Check Resource Group Stage'
+  jobs:
+  - job: CheckResourceGroup
+    displayName: 'Check or Create Resource Group'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Check or Create Resource Group'
+      inputs:
+        azureSubscription: $(service_conn)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: >-
+          echo "Checking if resource group '${{ parameters.RESOURCE_GROUP }}' exists..."
+
+          exists=$(az group exists --name ${{ parameters.RESOURCE_GROUP }})
+
+          echo "az returned: $exists"
+
+          if [ "$exists" = "false" ]; then
+            echo "##[warning] Resource group does not exist. Creating it now..."
+            az group create --name ${{ parameters.RESOURCE_GROUP }} --location ${{ parameters.location }} --only-show-errors
+            echo "✅ Resource group created successfully."
+          else
+            echo "✅ Resource group exists."
+          fi
+
+- stage: ValidateVM
+  displayName: 'Validate Azure VM Configuration'
+  jobs:
+  - job: ValidateVMConfig
+    displayName: 'Validate VM Configuration'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Validate VM Configuration'
+      inputs:
+        azureSubscription: $(service_conn)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          # Validate VM name
+          if [[ ! "${{ parameters.vmName }}" =~ ^[a-zA-Z0-9-]{1,64}$ ]]; then
+            echo "##[error] VM name must be 1-64 characters (alphanumeric and hyphens only)"
+            exit 1
+          fi
+          
+          # Validate admin username
+          if [[ ! "${{ parameters.adminUsername }}" =~ ^[a-zA-Z][a-zA-Z0-9-]{0,19}$ ]]; then
+            echo "##[error] Admin username must start with a letter and be 1-20 characters (alphanumeric and hyphens)"
+            exit 1
+          fi
+          
+          # Check if VNet exists
+          if ! az network vnet show --name "${{ parameters.vnetName }}" --resource-group "${{ parameters.RESOURCE_GROUP }}" &> /dev/null; then
+            echo "##[error] Virtual Network '${{ parameters.vnetName }}' does not exist in resource group '${{ parameters.RESOURCE_GROUP }}'"
+            exit 1
+          fi
+          
+          # Check if Subnet exists
+          if ! az network vnet subnet show --name "${{ parameters.subnetName }}" --vnet-name "${{ parameters.vnetName }}" --resource-group "${{ parameters.RESOURCE_GROUP }}" &> /dev/null; then
+            echo "##[error] Subnet '${{ parameters.subnetName }}' does not exist in VNet '${{ parameters.vnetName }}'"
+            exit 1
+          fi
+          
+          echo "✅ VM configuration validation passed"
+
+- stage: CreateNetworkInterface
+  displayName: 'Create Network Interface'
+  jobs:
+  - job: CreateNICJob
+    displayName: 'Create NIC'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Create Network Interface'
+      inputs:
+        azureSubscription: $(service_conn)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: >
+          echo "Creating Network Interface for VM: ${{ parameters.vmName }}"
+
+          az network nic create \
+            --name "${{ parameters.vmName }}-nic" \
+            --resource-group "${{ parameters.RESOURCE_GROUP }}" \
+            --location "${{ parameters.location }}" \
+            --vnet-name "${{ parameters.vnetName }}" \
+            --subnet "${{ parameters.subnetName }}" \
+            --output table
+          
+          echo "✅ Network Interface created successfully"
+
+- stage: CreateVirtualMachine
+  displayName: 'Create Virtual Machine'
+  jobs:
+  - job: CreateVMJob
+    displayName: 'Create VM'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Create Virtual Machine'
+      inputs:
+        azureSubscription: $(service_conn)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: >
+          echo "Creating Virtual Machine: ${{ parameters.vmName }}"
+
+          if [ "${{ parameters.osType }}" = "Linux" ]; then
+            echo "Creating Linux VM..."
+            az vm create \
+              --name "${{ parameters.vmName }}" \
+              --resource-group "${{ parameters.RESOURCE_GROUP }}" \
+              --location "${{ parameters.location }}" \
+              --size "${{ parameters.vmSize }}" \
+              --admin-username "${{ parameters.adminUsername }}" \
+              --admin-password "${{ parameters.adminPassword }}" \
+              --authentication-type password \
+              --image "${{ parameters.imagePublisher }}:${{ parameters.imageOffer }}:${{ parameters.imageSku }}:latest" \
+              --nics "${{ parameters.vmName }}-nic" \
+              --os-disk-name "${{ parameters.vmName }}-osdisk" \
+              --storage-sku Standard_LRS \
+              --output table
+          else
+            echo "Creating Windows VM..."
+            az vm create \
+              --name "${{ parameters.vmName }}" \
+              --resource-group "${{ parameters.RESOURCE_GROUP }}" \
+              --location "${{ parameters.location }}" \
+              --size "${{ parameters.vmSize }}" \
+              --admin-username "${{ parameters.adminUsername }}" \
+              --admin-password "${{ parameters.adminPassword }}" \
+              --image "${{ parameters.imagePublisher }}:${{ parameters.imageOffer }}:${{ parameters.imageSku }}:latest" \
+              --nics "${{ parameters.vmName }}-nic" \
+              --os-disk-name "${{ parameters.vmName }}-osdisk" \
+              --storage-sku Standard_LRS \
+              --output table
+          fi
+          
+          echo "✅ Virtual Machine created successfully"
+
+- stage: WaitForProvisioning
+  displayName: 'Wait for VM Provisioning'
+  jobs:
+  - job: WaitJob
+    displayName: 'Wait 60 seconds'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: Bash@3
+      displayName: 'Sleep for 60 seconds'
+      inputs:
+        targetType: 'inline'
+        script: |
+          echo "Waiting 60 seconds for Virtual Machine to be fully provisioned..."
+          sleep 60
+          echo "✅ Wait completed"
+
+- stage: AssignRole
+  displayName: 'Assign Role to Principal'
+  jobs:
+  - job: AssignRoleJob
+    displayName: 'Assign Role to VM Resources'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Assign Role to Principal'
+      inputs:
+        azureSubscription: $(service_conn)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: >
+          echo "Assigning role '${{ parameters.role }}' to principal '${{ parameters.principalId }}'"
+
+          # Get VM Resource ID for role assignment scope
+          VM_RESOURCE_ID=$(az vm show \
+            --name "${{ parameters.vmName }}" \
+            --resource-group "${{ parameters.RESOURCE_GROUP }}" \
+            --query id -o tsv)
+          
+          az role assignment create \
+            --assignee "${{ parameters.principalId }}" \
+            --role "${{ parameters.role }}" \
+            --scope "$VM_RESOURCE_ID" \
+            --output table
+          
+          echo "✅ Role assignment completed successfully"
+
+- stage: SmokeTest
+  displayName: 'Smoke Test Virtual Machine'
+  jobs:
+  - job: SmokeTestJob
+    displayName: 'Verify VM Resources Exist'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Check VM Infrastructure Exists'
+      inputs:
+        azureSubscription: $(service_conn)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Verifying Virtual Machine infrastructure exists..."
+          
+          # Check VM
+          if az vm show --name "${{ parameters.vmName }}" --resource-group "${{ parameters.RESOURCE_GROUP }}" &> /dev/null; then
+            echo "✅ Virtual Machine '${{ parameters.vmName }}' exists."
+          else
+            echo "❌ ##[error] ERROR: Virtual Machine '${{ parameters.vmName }}' does not exist." >&2
+            exit 1
+          fi
+          
+          # Check NIC
+          if az network nic show --name "${{ parameters.vmName }}-nic" --resource-group "${{ parameters.RESOURCE_GROUP }}" &> /dev/null; then
+            echo "✅ Network Interface '${{ parameters.vmName }}-nic' exists."
+          else
+            echo "❌ ##[error] ERROR: Network Interface '${{ parameters.vmName }}-nic' does not exist." >&2
+            exit 1
+          fi
+          
+          # Get VM status
+          VM_STATUS=$(az vm get-instance-view --name "${{ parameters.vmName }}" --resource-group "${{ parameters.RESOURCE_GROUP }}" --query "instanceView.statuses[1].displayStatus" -o tsv)
+          echo "VM Power State: $VM_STATUS"
+          
+          echo "========================================"
+          echo "Azure Virtual Machine Details:"
+          echo "========================================"
+          
+          echo ""
+          echo "Virtual Machine Details:"
+          az vm show \
+            --name "${{ parameters.vmName }}" \
+            --resource-group "${{ parameters.RESOURCE_GROUP }}" \
+            --output table
+          
+          echo ""
+          echo "Network Interface Details:"
+          az network nic show \
+            --name "${{ parameters.vmName }}-nic" \
+            --resource-group "${{ parameters.RESOURCE_GROUP }}" \
+            --output table
+          
+          echo ""
+          echo "Virtual Machine Configuration:"
+          echo "- VM Name: ${{ parameters.vmName }}"
+          echo "- VM Size: ${{ parameters.vmSize }}"
+          echo "- OS Type: ${{ parameters.osType }}"
+          echo "- Admin Username: ${{ parameters.adminUsername }}"
+          echo "- Image: ${{ parameters.imagePublisher }}:${{ parameters.imageOffer }}:${{ parameters.imageSku }}"
+          echo "- VNet: ${{ parameters.vnetName }}"
+          echo "- Subnet: ${{ parameters.subnetName }}"
+          echo "- Resource Group: ${{ parameters.RESOURCE_GROUP }}"
+          echo "- Location: ${{ parameters.location }}"
+          echo "- Role Assigned: ${{ parameters.role }}"
+          echo "- Principal ID: ${{ parameters.principalId }}"
+          echo "- Power State: $VM_STATUS"
+          
+          echo "========================================"
+          echo "✅ Virtual Machine smoke test completed successfully."

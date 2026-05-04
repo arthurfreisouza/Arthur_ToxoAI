@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HIV Testing Assistant - MediTest</title>
+    <link rel="stylesheet" href="hiv_chat.css">
+</head>
+<body>
+    <div class="chat-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="header-content">
+                <div class="header-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="9"/>
+                        <path d="M12 7v10M7 12h10"/>
+                        <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div class="header-text">
+                    <h1>HIV Testing Assistant</h1>
+                    <p>Powered by AI - Ask any questions about HIV testing</p>
+                </div>
+            </div>
+            <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
+                <button class="settings-btn" onclick="toggleSettings()" title="Settings & Documents">⚙️</button>
+                <button class="close-btn" onclick="window.close()">✕</button>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel" style="display: none;">
+            <div class="settings-content">
+                <h2>AI & RAG Settings</h2>
+                
+                <!-- RAG Documents Upload Section Added Here -->
+                <div class="settings-group">
+                    <h3 style="margin-bottom: 10px; font-size: 16px;">1. RAG Documents</h3>
+                    <p style="margin-bottom: 15px; font-size: 13px;">Upload PDFs or Text files to provide custom context for the assistant.</p>
+                    <input type="file" id="fileUpload" accept=".pdf,.txt" style="display: none;" onchange="uploadDocument(event)">
+                    <button onclick="document.getElementById('fileUpload').click()" class="btn-primary" id="uploadBtn" style="width: 100%; margin-bottom: 15px; background: var(--accent) !important; color: white !important;">Upload Document</button>
+                    
+                    <h4 style="margin-bottom: 8px; font-size: 14px;">Uploaded Files:</h4>
+                    <ul id="documentList" style="list-style-type: none; padding: 0; max-height: 100px; overflow-y: auto; font-size: 13px;">
+                        <li>Loading documents...</li>
+                    </ul>
+                </div>
+
+                <h3 style="margin-bottom: 10px; font-size: 16px;">2. LLM Parameters</h3>
+                <div class="settings-group">
+                    <label for="systemPrompt">System Prompt:</label>
+                    <textarea id="systemPrompt" placeholder="Enter custom system prompt..." rows="4"></textarea>
+                </div>
+                
+                <div class="settings-row">
+                    <div class="settings-group">
+                        <label for="temperature">Temperature: <span id="tempValue">0.7</span></label>
+                        <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7" 
+                               oninput="document.getElementById('tempValue').textContent = this.value">
+                        <small>Lower = focused, Higher = creative</small>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label for="topP">Top P: <span id="topPValue">0.95</span></label>
+                        <input type="range" id="topP" min="0" max="1" step="0.05" value="0.95"
+                               oninput="document.getElementById('topPValue').textContent = this.value">
+                        <small>Nucleus sampling</small>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label for="maxTokens">Max Tokens: <span id="maxTokensValue">500</span></label>
+                        <input type="range" id="maxTokens" min="100" max="2000" step="100" value="500"
+                               oninput="document.getElementById('maxTokensValue').textContent = this.value">
+                        <small>Response length</small>
+                    </div>
+                </div>
+                
+                <div class="settings-actions">
+                    <button onclick="resetSettings()" class="btn-secondary">Reset to Defaults</button>
+                    <button onclick="toggleSettings()" class="btn-primary">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div class="chat-messages" id="chatMessages">
+            <!-- Messages are injected via JavaScript -->
+        </div>
+
+        <!-- Chat Input Area -->
+        <div class="chat-input-area">
+            <form id="chatForm" onsubmit="sendMessage(event)">
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        placeholder="Message ChatGPT style..." 
+                        required
+                        autocomplete="off"
+                    >
+                    <button type="submit" class="send-btn" id="sendBtn" title="Send message">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                             <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+            <p class="input-hint">💡 This AI assistant provides educational information and leverages RAG for context.</p>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div class="loading-indicator" id="loadingIndicator" style="display: none; position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); background: var(--bg-surface); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--border-color);">
+            <div class="spinner"></div>
+            <p style="margin: 0; font-size: 12px; margin-left: 8px;">Thinking...</p>
+        </div>
+    </div>
+
+    <script src="hiv_chat.js"></script>
+</body>
+</html>

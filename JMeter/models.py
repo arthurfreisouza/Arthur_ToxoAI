@@ -15,3 +15,15 @@ class User(Base):
     
     def __repr__(self):
         return f"<User(username='{self.username}', email='{self.email}')>"
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, index=True)
+    content_type = Column(String)
+    user_id = Column(Integer, nullable=False)
+    
+    def __repr__(self):
+        return f"<Document(filename='{self.filename}', user_id='{self.user_id}')>"

@@ -53,6 +53,47 @@
             </div>
         </div>
 
+        <!-- Choice Selection Screen (shown after login) -->
+        <div id="choice-section" class="choice-section" style="display: none;">
+            <div class="choice-container">
+                <div class="choice-header">
+                    <h1>Select Test Type</h1>
+                    <p>Choose the medical test you'd like to perform</p>
+                </div>
+
+                <div class="choice-cards">
+                    <!-- HIV Card -->
+                    <div class="choice-card" onclick="selectTestType('HIV')">
+                        <div class="card-icon hiv-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+                                <path d="M12 6v12M6 12h12"/>
+                            </svg>
+                        </div>
+                        <h2>HIV Testing</h2>
+                        <p>Comprehensive HIV screening and analysis</p>
+                        <div class="card-arrow">→</div>
+                    </div>
+
+                    <!-- Cancer Card -->
+                    <div class="choice-card" onclick="selectTestType('Cancer')">
+                        <div class="card-icon cancer-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="8"/>
+                                <path d="M12 4v16M4 12h16"/>
+                                <circle cx="12" cy="12" r="2" fill="currentColor"/>
+                            </svg>
+                        </div>
+                        <h2>Cancer Screening</h2>
+                        <p>Early detection and risk assessment screening</p>
+                        <div class="card-arrow">→</div>
+                    </div>
+                </div>
+
+                <button onclick="logout()" class="btn btn-logout">Logout</button>
+            </div>
+        </div>
+
         <!-- User Dashboard (shown after login) -->
         <div id="dashboard-section" class="dashboard-section" style="display: none;">
             <div class="dashboard-container">

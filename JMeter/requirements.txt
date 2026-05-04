@@ -1,6 +1,15 @@
 fastapi==0.109.0
+bcrypt<4.0.0
 uvicorn[standard]==0.27.0
 sqlalchemy==2.0.25
 passlib[bcrypt]==1.7.4
 python-jose[cryptography]==3.3.0
 python-multipart==0.0.6
+requests==2.31.0
+openai>=1.10.0
+langchain==0.1.4
+langchain-community==0.0.16
+faiss-cpu==1.7.4
+sentence-transformers==2.2.2
+pypdf==3.17.4
+tiktoken==0.5.2
