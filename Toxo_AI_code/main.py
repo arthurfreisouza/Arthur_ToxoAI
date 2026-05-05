@@ -37,7 +37,7 @@ class ChatResponse(BaseModel):
     response: str
 
 # HuggingFace Configuration
-HF_API_TOKEN = "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"
+HF_API_TOKEN = "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"
 HF_MODEL_ID = "meta-llama/Llama-3.1-8B-Instruct:novita"
 
 # Initialize OpenAI client for HuggingFace
