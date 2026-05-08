@@ -1,0 +1,254 @@
+trigger: none
+
+parameters:
+  - name: personName
+    displayName: "Person/Owner Name"
+    type: string
+    default: 'Arthur'
+  - name: location
+    displayName: "Azure Region"
+    type: string
+    default: 'brazilsouth'
+  - name: templateML
+    displayName: "Bicep Template Path"
+    type: string
+    default: 'infra/bicep_files/azure_ml_deploy.bicep'
+  
+  # Selection parameters for stages
+  - name: runDev
+    displayName: "Deploy to Dev?"
+    type: boolean
+    default: true
+  - name: runTest
+    displayName: "Deploy to Test?"
+    type: boolean
+    default: false
+  - name: runProd
+    displayName: "Deploy to Prod?"
+    type: boolean
+    default: false
+
+variables:
+  - group: Arthur_VG 
+  # Consistent naming convention: rg-Arthur-dev
+  - name: rgDev
+    value: 'rg-${{ parameters.personName }}-dev'
+  - name: rgTest
+    value: 'rg-${{ parameters.personName }}-test'
+  - name: rgProd
+    value: 'rg-${{ parameters.personName }}-prod'
+
+stages:
+  - stage: Lint
+    displayName: 'Lint Bicep'
+    jobs:
+      - job: LintBicep
+        steps:
+          - script: az bicep build --file ${{ parameters.templateML }}
+            displayName: 'Bicep Lint'
+
+  # --- DEV STAGE ---
+  - stage: Deploy_Dev
+    displayName: 'Deploy to Development'
+    dependsOn: Lint
+    condition: and(succeeded(), eq('${{ parameters.runDev }}', 'true'))
+    variables:
+      - name: envName
+        value: 'dev'
+      - name: rgName
+        value: $(rgDev)
+    jobs:
+      - job: DeployJob
+        displayName: 'Validation and Deployment'
+        steps:
+          - task: AzureCLI@2
+            displayName: '1. Ensure Resource Group Exists'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: az group create --name $(rgName) --location ${{ parameters.location }}
+
+          - task: AzureCLI@2
+            displayName: '2. Validate Bicep Deployment'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group validate \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}'
+
+          - task: AzureCLI@2
+            displayName: '3. What-If Preview'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group what-if \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}'
+
+          - task: AzureCLI@2
+            displayName: '4. Execute Deployment'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                WORKSPACE_NAME=$(az deployment group create \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}' \
+                  --query properties.outputs.mlWorkspaceName.value -o tsv)
+                echo "##vso[task.setvariable variable=workspaceName]$WORKSPACE_NAME"
+
+          - task: AzureCLI@2
+            displayName: '5. Smoke Test'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: az ml workspace show --name $(workspaceName) --resource-group $(rgName)
+
+  # --- TEST STAGE ---
+  - stage: Deploy_Test
+    displayName: 'Deploy to Test'
+    dependsOn: Deploy_Dev
+    condition: and(not(failed()), eq('${{ parameters.runTest }}', 'true'))
+    variables:
+      - name: envName
+        value: 'test'
+      - name: rgName
+        value: $(rgTest)
+    jobs:
+      - job: DeployJob
+        displayName: 'Validation and Deployment'
+        steps:
+          - task: AzureCLI@2
+            displayName: '1. Ensure Resource Group Exists'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: az group create --name $(rgName) --location ${{ parameters.location }}
+
+          - task: AzureCLI@2
+            displayName: '2. Validate Bicep Deployment'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group validate \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}'
+
+          - task: AzureCLI@2
+            displayName: '3. What-If Preview'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group what-if \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}'
+
+          - task: AzureCLI@2
+            displayName: '4. Execute Deployment'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                WORKSPACE_NAME=$(az deployment group create \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}' \
+                  --query properties.outputs.mlWorkspaceName.value -o tsv)
+                echo "##vso[task.setvariable variable=workspaceName]$WORKSPACE_NAME"
+
+  # --- PROD STAGE ---
+  - stage: Deploy_Prod
+    displayName: 'Deploy to Production'
+    dependsOn: Deploy_Test
+    condition: and(not(failed()), eq('${{ parameters.runProd }}', 'true'))
+    variables:
+      - name: envName
+        value: 'prod'
+      - name: rgName
+        value: $(rgProd)
+    jobs:
+      - job: DeployJob
+        displayName: 'Validation and Deployment'
+        steps:
+          - task: AzureCLI@2
+            displayName: '1. Ensure Resource Group Exists'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: az group create --name $(rgName) --location ${{ parameters.location }}
+
+          - task: AzureCLI@2
+            displayName: '2. Validate Bicep Deployment'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group validate \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}'
+
+          - task: AzureCLI@2
+            displayName: '3. What-If Preview'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az deployment group what-if \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}'
+
+          - task: AzureCLI@2
+            displayName: '4. Execute Deployment'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                WORKSPACE_NAME=$(az deployment group create \
+                  --resource-group $(rgName) \
+                  --template-file ${{ parameters.templateML }} \
+                  --parameters personName='${{ parameters.personName }}' \
+                               environment='$(envName)' \
+                               location='${{ parameters.location }}' \
+                  --query properties.outputs.mlWorkspaceName.value -o tsv)
+                echo "##vso[task.setvariable variable=workspaceName]$WORKSPACE_NAME"

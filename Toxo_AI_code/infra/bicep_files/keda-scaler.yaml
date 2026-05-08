@@ -1,0 +1,16 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: azure-pipelines-scaler
+  namespace: ado-agents
+spec:
+  scaleTargetRef:
+    name: azure-agent # Must match your Deployment name
+  minReplicaCount: 0  # Scale to zero when no builds!
+  maxReplicaCount: 10 # Maximum burst
+  triggers:
+  - type: azure-pipelines
+    metadata:
+      poolName: "k8s-poll"
+      organizationURLFromEnv: "AZP_URL"
+      personalAccessTokenFromEnv: "AZP_TOKEN"

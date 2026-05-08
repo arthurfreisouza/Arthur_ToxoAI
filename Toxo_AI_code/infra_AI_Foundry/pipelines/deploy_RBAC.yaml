@@ -1,0 +1,59 @@
+trigger: none
+
+parameters:
+  - name: RESOURCE_GROUP
+    type: string
+    default: 'projArthurReis'
+  - name: location
+    type: string
+    default: 'brazilsouth'
+  - name: VARIABLE_GROUP_NAME
+    type: string
+    default: 'HouseRent'
+
+variables:
+  - group: Arthur_VG  # Contains service_conn
+  - group: ${{ parameters.VARIABLE_GROUP_NAME }}
+
+stages:
+  - stage: Provision
+    jobs:
+      - job: AssignRBAC
+        steps:
+          # Ensure RG exists before assigning roles
+          - task: AzureCLI@2
+            displayName: 'Ensure Resource Group & Assign RBAC'
+            inputs:
+              azureSubscription: '$(service_conn)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # 1. Ensure the Resource Group exists
+                az group create --name ${{ parameters.RESOURCE_GROUP }} --location ${{ parameters.location }}
+
+                # 2. Extract GUIDs using a more flexible detection script
+                ASSIGNMENTS_JSON=$(python3 -c "
+                import os, json, re
+                assignments = []
+                # Matches GUIDs with or without a leading underscore, using hyphens or underscores
+                pattern = re.compile(r'_?([A-F0-9]{8})_([A-F0-9]{4})_([A-F0-9]{4})_([A-F0-9]{4})_([A-F0-9]{12})', re.IGNORECASE)
+                valid_roles = ['Owner', 'Contributor', 'Reader', 'AcrPull']
+                
+                for env_name, role in os.environ.items():
+                    if role in valid_roles:
+                        match = pattern.search(env_name)
+                        if match:
+                            # Convert back to standard hyphenated GUID format
+                            guid = '-'.join(match.groups()).lower()
+                            assignments.append({'principalId': guid, 'roleName': role})
+                
+                print(json.dumps(assignments))
+                ")
+
+                echo "Final JSON for Bicep: $ASSIGNMENTS_JSON"
+
+                # 3. Deploy Bicep
+                az deployment group create \
+                  --resource-group ${{ parameters.RESOURCE_GROUP }} \
+                  --template-file infra/bicep_files/rbac_assignments.bicep \
+                  --parameters assignments="$ASSIGNMENTS_JSON"
