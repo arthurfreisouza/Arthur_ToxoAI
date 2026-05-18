@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#667eea">
+    <title>IA-Toxo — Verify your email</title>
+    <link rel="stylesheet" href="/assets/css/base.css">
+    <link rel="stylesheet" href="/assets/css/verify.css">
+</head>
+<body>
+    <main class="container">
+        <section class="verify-card">
+            <header class="brand">
+                <h1 class="brand-title">IA-Toxo</h1>
+                <p class="brand-subtitle">Email verification</p>
+            </header>
+
+            <div id="verify-state" class="verify-state state-loading">
+                <div class="spinner" aria-hidden="true"></div>
+                <h2 id="verify-title">Verifying your email…</h2>
+                <p id="verify-message">Hold on a moment.</p>
+            </div>
+
+            <a id="verify-cta" class="btn btn-primary" href="/" hidden>Continue to sign in</a>
+        </section>
+    </main>
+
+    <script>
+        // Override API base for local development (frontend on 8080, backend on 8000)
+        if (window.location.hostname === 'localhost' && window.location.port === '8080') {
+            window.__IA_TOXO_API_BASE__ = 'http://localhost:8000/api/v1';
+        }
+    </script>
+    <script type="module" src="/assets/js/verify-app.js"></script>
+</body>
+</html>

@@ -1,0 +1,103 @@
+.dashboard-section {
+    background: var(--color-bg-card);
+    backdrop-filter: blur(20px);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+    padding: 36px 32px;
+    animation: slideIn 0.4s ease-out;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.dashboard-header h1 {
+    font-size: 24px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.btn-logout {
+    width: auto;
+    padding: 10px 18px;
+    background: white;
+    color: #b91c1c;
+    border: 1.5px solid #fecaca;
+    font-size: 14px;
+}
+
+.btn-logout:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+}
+
+.user-card {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+    padding: 32px;
+    border-radius: var(--radius-card);
+    color: white;
+    box-shadow: 0 12px 30px rgba(102, 126, 234, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.user-card::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, transparent 70%);
+    animation: rotate 14s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes rotate {
+    to { transform: rotate(360deg); }
+}
+
+.user-card h2 {
+    position: relative;
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 22px;
+}
+
+.user-info {
+    position: relative;
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 10px 16px;
+    font-size: 15px;
+}
+
+.user-info dt {
+    opacity: 0.8;
+    font-weight: 500;
+}
+
+.user-info dd {
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.status {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.status-inactive {
+    background: rgba(0, 0, 0, 0.25);
+}

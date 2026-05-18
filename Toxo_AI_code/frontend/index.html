@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#667eea">
+    <title>IA-Toxo — Sign in</title>
+    <link rel="stylesheet" href="/assets/css/base.css">
+    <link rel="stylesheet" href="/assets/css/auth.css">
+    <link rel="stylesheet" href="/assets/css/dashboard.css">
+</head>
+<body>
+    <main class="container">
+        <section id="auth-section" class="auth-section">
+            <div class="form-container">
+                <header class="brand">
+                    <h1 class="brand-title">IA-Toxo</h1>
+                    <p class="brand-subtitle">Clinical assistant for congenital toxoplasmosis</p>
+                </header>
+
+                <div class="form-tabs" role="tablist">
+                    <button id="tab-login" class="tab-btn active" role="tab" aria-selected="true">Sign in</button>
+                    <button id="tab-register" class="tab-btn" role="tab" aria-selected="false">Create account</button>
+                </div>
+
+                <form id="login-form" class="auth-form active" novalidate>
+                    <h2>Welcome back</h2>
+                    <div class="form-group">
+                        <label for="login-email">Email</label>
+                        <input type="email" id="login-email" autocomplete="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password</label>
+                        <input type="password" id="login-password" autocomplete="current-password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Sign in</button>
+                    <div id="login-error" class="error-message" role="alert"></div>
+                    <div id="login-info" class="info-message" role="status"></div>
+                </form>
+
+                <form id="register-form" class="auth-form" novalidate>
+                    <h2>Create your account</h2>
+                    <div class="form-group">
+                        <label for="register-email">Email</label>
+                        <input type="email" id="register-email" autocomplete="email" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-username">Username</label>
+                        <input type="text" id="register-username" autocomplete="username" minlength="3" maxlength="64" pattern="[a-zA-Z0-9_.\-]+" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="register-password">Password</label>
+                        <input type="password" id="register-password" autocomplete="new-password" minlength="8" required>
+                        <p class="hint">At least 8 characters.</p>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Create account</button>
+                    <div id="register-error" class="error-message" role="alert"></div>
+                    <div id="register-success" class="success-message" role="status"></div>
+                </form>
+            </div>
+        </section>
+
+        <section id="dashboard-section" class="dashboard-section" hidden>
+            <header class="dashboard-header">
+                <h1>IA-Toxo</h1>
+                <button id="logout-btn" class="btn btn-logout" type="button">Sign out</button>
+            </header>
+            <article class="user-card">
+                <h2>Welcome, <span id="user-username"></span></h2>
+                <dl class="user-info">
+                    <dt>Email</dt><dd id="user-email"></dd>
+                    <dt>User ID</dt><dd id="user-id"></dd>
+                    <dt>Status</dt><dd><span id="user-status" class="status status-active">Active</span></dd>
+                </dl>
+            </article>
+            <div id="dashboard-error" class="error-message" role="alert"></div>
+        </section>
+    </main>
+
+    <script>
+        // Override API base for local development (frontend on 8080, backend on 8000)
+        if (window.location.hostname === 'localhost' && window.location.port === '8080') {
+            window.__IA_TOXO_API_BASE__ = 'http://localhost:8000/api/v1';
+        }
+    </script>
+    <script type="module" src="/assets/js/app.js"></script>
+</body>
+</html>

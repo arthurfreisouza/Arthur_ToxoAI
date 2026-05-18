@@ -1,206 +1,108 @@
-# Simple Login System with FastAPI
+# IA-Toxo
 
-A complete full-stack login/registration system with a FastAPI backend and vanilla JavaScript frontend.
+Clinical decision-support assistant for **congenital toxoplasmosis**, developed at UFMG. This repo contains the application code, Azure infrastructure templates, and project documentation supporting Arthur Reis' TCC ("Desenvolvimento de um Assistente Virtual Baseado em GraphRAG para Auxílio no Diagnóstico de Toxoplasmose Congênita").
 
-## Features
+The current code ships the **auth foundation** — email/password registration with real email verification, JWT-based sessions, a hardened backend and modular frontend. The GraphRAG + Neo4j + LLM orchestration layer is the next phase.
 
-### Backend
-- ✅ User Registration
-- ✅ User Login with JWT tokens
-- ✅ Password hashing with bcrypt
-- ✅ SQLite database
-- ✅ Protected endpoints
-- ✅ CORS enabled for frontend communication
-
-### Frontend
-- ✅ Clean and modern UI
-- ✅ Login and Registration forms
-- ✅ User dashboard after login
-- ✅ Token-based authentication
-- ✅ Error handling and validation
-- ✅ Responsive design
-
-## Installation
-
-1. Install the required dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-## Running the Application
-
-### 1. Start the Backend Server
-
-Start the FastAPI server:
-```bash
-python main.py
-```
-
-Or use uvicorn directly:
-```bash
-uvicorn main:app --reload
-```
-
-The API will be available at `http://localhost:8000`
-
-### 2. Open the Frontend
-
-Simply open `index.html` in your web browser, or use a local server:
-
-**Option A: Direct file opening**
-```bash
-# Just open the file
-open index.html  # macOS
-xdg-open index.html  # Linux
-start index.html  # Windows
-```
-
-**Option B: Using Python's built-in server (recommended)**
-```bash
-# In a new terminal, run:
-python3 -m http.server 8080
-# Then visit: http://localhost:8080
-```
-
-**Option C: Using VS Code Live Server**
-- Install Live Server extension
-- Right-click on `index.html` and select "Open with Live Server"
-
-## API Endpoints
-
-### 1. Root Endpoint
-- **GET** `/`
-- Returns API information and available endpoints
-
-### 2. Register
-- **POST** `/register`
-- Register a new user
-- **Request Body:**
-```json
-{
-  "username": "john_doe",
-  "email": "john@example.com",
-  "password": "securepassword123"
-}
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "username": "john_doe",
-  "email": "john@example.com",
-  "is_active": true
-}
-```
-
-### 3. Login
-- **POST** `/login`
-- Login and receive JWT token
-- **Request Body:**
-```json
-{
-  "username": "john_doe",
-  "password": "securepassword123"
-}
-```
-- **Response:**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "bearer"
-}
-```
-
-### 4. Get Current User
-- **GET** `/me`
-- Get information about the currently logged-in user (requires authentication)
-- **Headers:**
-```
-Authorization: Bearer <your_access_token>
-```
-- **Response:**
-```json
-{
-  "id": 1,
-  "username": "john_doe",
-  "email": "john@example.com",
-  "is_active": true
-}
-```
-
-## Testing with curl
-
-### Register a new user:
-```bash
-curl -X POST "http://localhost:8000/register" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "testuser", "email": "test@example.com", "password": "testpass123"}'
-```
-
-### Login:
-```bash
-curl -X POST "http://localhost:8000/login" \
-  -H "Content-Type: application/json" \
-  -d '{"username": "testuser", "password": "testpass123"}'
-```
-
-### Get current user (replace TOKEN with your actual token):
-```bash
-curl -X GET "http://localhost:8000/me" \
-  -H "Authorization: Bearer TOKEN"
-```
-
-## Interactive API Documentation
-
-FastAPI provides automatic interactive API documentation:
-
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-## Security Notes
-
-⚠️ **Important for Production:**
-1. Change the `SECRET_KEY` in `auth.py` to a strong, random secret key
-2. Use environment variables for sensitive configuration
-3. Use a production-grade database (PostgreSQL, MySQL, etc.) instead of SQLite
-4. Enable HTTPS
-5. Add rate limiting
-6. Implement email verification
-7. Add password strength requirements
-
-## Project Structure
+## Repository layout
 
 ```
 .
-├── Backend
-│   ├── main.py           # FastAPI application and endpoints
-│   ├── models.py         # Database models
-│   ├── auth.py           # Authentication utilities (JWT, password hashing)
-│   ├── database.py       # Database configuration and session management
-│   └── requirements.txt  # Python dependencies
-├── Frontend
-│   ├── index.html        # Main HTML page with login/register forms
-│   ├── style.css         # Styling for the frontend
-│   └── app.js            # JavaScript for API communication and UI logic
-└── users.db              # SQLite database (created automatically)
+├── backend/                FastAPI app (modular, PostgreSQL + Alembic)
+│   ├── app/
+│   │   ├── api/v1/         versioned API routers
+│   │   ├── core/           config (Pydantic Settings), security (JWT, bcrypt)
+│   │   ├── db/             SQLAlchemy base + session
+│   │   ├── models/         ORM models
+│   │   ├── schemas/        Pydantic request/response models
+│   │   ├── services/       business logic (auth, email via Resend)
+│   │   └── main.py         FastAPI app factory
+│   ├── alembic/            migrations
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/               static SPA (vanilla JS, ES modules, no build step)
+│   ├── index.html          sign in / register / dashboard
+│   ├── verify.html         email verification landing
+│   └── assets/{css,js}/
+├── deploy/                 nginx + systemd templates, full deploy recipe
+├── infra/                  Azure ML workspace Bicep + ADO pipelines
+├── infra_AI_Foundry/       Azure AI Foundry Hub Bicep + ADO pipelines
+└── files/                  project docs (TCC, monograph, project summary)
 ```
 
-## Technologies Used
+## Architecture (current)
 
-### Backend
-- **FastAPI**: Modern, fast web framework for building APIs
-- **SQLAlchemy**: SQL toolkit and ORM
-- **SQLite**: Lightweight database
-- **Passlib**: Password hashing library
-- **python-jose**: JWT token handling
-- **Uvicorn**: ASGI server
+```
+Browser ──── HTTPS ────► nginx ──── /api/ ────► uvicorn (FastAPI)
+                          │                        │
+                          │                        ├─► PostgreSQL (users)
+                          │                        └─► Resend API (verification emails)
+                          └── static assets (frontend/)
+```
 
-### Frontend
-- **HTML5**: Structure and forms
-- **CSS3**: Modern styling with gradients and animations
-- **Vanilla JavaScript**: API integration and DOM manipulation
-- **Fetch API**: HTTP requests to backend
+- **Backend**: FastAPI, SQLAlchemy 2.0 (sync, psycopg 3), Alembic, Pydantic Settings for env config, bcrypt + JWT (HS256), Resend for transactional email.
+- **Frontend**: vanilla ES modules — `api.js` (fetch wrapper + typed errors), `ui.js` (message + loading helpers), `views/{auth,dashboard}.js`, `verify-app.js`. No build step, served directly by nginx.
+- **Email verification flow**: registration creates an unverified user → backend issues a signed JWT with `type=verify` → Resend sends the link to `FRONTEND_URL/verify.html?token=…` → the page POSTs the token to `/api/v1/auth/verify` → user is marked verified. Login is blocked while `is_verified=false`.
+
+## Quick start (local dev)
+
+Requires Python 3.11+, PostgreSQL 14+, a Resend API key.
+
+```bash
+# 1. Postgres
+createuser -P iatoxo                       # or via psql
+createdb -O iatoxo iatoxo
+
+# 2. Backend
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env                       # edit SECRET_KEY, DATABASE_URL, RESEND_API_KEY, FRONTEND_URL
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+
+# 3. Frontend (separate terminal)
+cd ../frontend
+python -m http.server 8080
+# Open http://localhost:8080
+# Set FRONTEND_URL=http://localhost:8080 and CORS_ORIGINS=["http://localhost:8080"] in backend .env
+```
+
+## API surface
+
+| Method | Path                              | Auth | Purpose                                   |
+| -----: | --------------------------------- | :--: | ----------------------------------------- |
+|    GET | `/health`                         |   –  | Liveness probe                            |
+|   POST | `/api/v1/auth/register`           |   –  | Create account, send verification email   |
+|   POST | `/api/v1/auth/login`              |   –  | Exchange credentials for an access token  |
+|   POST | `/api/v1/auth/verify`             |   –  | Confirm an email via a verification token |
+|   POST | `/api/v1/auth/resend-verification`|   –  | Re-send the verification email            |
+|    GET | `/api/v1/users/me`                |  ✓   | Current user                              |
+
+Interactive docs at `/docs` (Swagger) and `/redoc`, disabled when `ENVIRONMENT=production`.
+
+## Deployment
+
+Full step-by-step recipe for the Hostinger VPS in [`deploy/README.md`](deploy/README.md). Highlights:
+- `deploy/nginx.conf.example` — TLS termination, HSTS, security headers, static frontend + `/api/` proxy.
+- `deploy/iatoxo-backend.service.example` — hardened systemd unit (NoNewPrivileges, ProtectSystem, ProtectHome).
+- Resend domain verification (SPF/DKIM) is required before emails will land outside spam.
+
+## Security notes
+
+- `SECRET_KEY` is loaded from `.env` and validated to be at least 32 chars. Generate with `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+- `CORS_ORIGINS` defaults to `[]` (no cross-origin requests) since frontend and API share an origin behind nginx.
+- Verification tokens are short-lived signed JWTs (`type=verify`, 24 h default).
+- Access tokens are 60 min by default. Refresh tokens, password reset, and rate limiting are deliberately deferred — see follow-ups below.
+
+## Roadmap (next phases)
+
+1. Refresh tokens via httpOnly cookies + token rotation.
+2. Password reset flow (same Resend + signed-token pattern).
+3. Rate limiting on auth endpoints (nginx `limit_req` or `slowapi`).
+4. Audit log table.
+5. **The actual IA-Toxo work**: Neo4j ontology, GraphRAG retrieval, fine-tuned LLM client, chatbot UI, hospital-network isolation.
 
 ## License
 
-MIT
+Educational / academic use — UFMG TCC project. See `files/` for the formal project documentation.

@@ -8,25 +8,34 @@ __pycache__/
 dist/
 build/
 
-# Virtual Environment
+# Virtual environments
+.venv/
 venv/
 env/
 ENV/
 
-# Database
+# Local databases / dumps
 *.db
 *.sqlite
 *.sqlite3
+*.sql.gz
 
-# IDE
+# Environment files (never commit secrets)
+.env
+.env.*
+!.env.example
+
+# IDE / OS
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Environment variables
-.env
+# Logs
+*.log
+
+# Node (if a build step is added later)
+node_modules/
+.cache/
