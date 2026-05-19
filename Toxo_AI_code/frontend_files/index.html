@@ -4,9 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ToxoAI — HIV Testing Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+    <!-- ── Toast container ───────────────────────────────────────────── -->
+    <div id="toast-container" class="toast-container" aria-live="polite"></div>
 
     <!-- ── Auth Page ──────────────────────────────────────────────────── -->
     <div id="auth-page" class="auth-page">
@@ -66,8 +72,22 @@
 
         <!-- Header -->
         <header class="app-header">
-            <span class="app-logo">🧬 ToxoAI</span>
+            <div class="header-left">
+                <!-- Mobile: hamburger to toggle sidebar -->
+                <button class="btn-hamburger" id="hamburger-btn"
+                        onclick="toggleSidebar()" title="Toggle documents panel"
+                        aria-label="Toggle sidebar">
+                    <span></span><span></span><span></span>
+                </button>
+                <span class="app-logo">🧬 ToxoAI</span>
+            </div>
             <div class="header-right">
+                <button class="btn-new-chat" onclick="newChat()" title="New conversation">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    <span class="new-chat-label">New Chat</span>
+                </button>
                 <span class="online-dot" title="Connected"></span>
                 <span id="header-username" class="header-username"></span>
                 <button class="btn-logout" onclick="logout()" title="Sign out">Sign out</button>
@@ -75,6 +95,9 @@
         </header>
 
         <div class="app-body">
+
+            <!-- Sidebar overlay (mobile) -->
+            <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
             <!-- Sidebar -->
             <aside class="sidebar" id="sidebar">
@@ -98,6 +121,7 @@
                         <input type="file" id="file-input" accept=".pdf,.txt"
                                onchange="uploadDocument(this)" style="display:none;">
                     </label>
+                    <p class="upload-hint">PDF or TXT · max 10 MB</p>
                     <div id="upload-msg" class="upload-msg"></div>
                 </div>
             </aside>
@@ -105,18 +129,7 @@
             <!-- Chat -->
             <main class="chat-main">
                 <div id="chat-messages" class="chat-messages">
-                    <!-- Welcome state -->
-                    <div class="chat-welcome" id="chat-welcome">
-                        <div class="welcome-icon">🧬</div>
-                        <h2>Welcome to ToxoAI</h2>
-                        <p>Ask me anything about HIV testing, prevention, and sexual health. I'm here to help with clear, accurate, and compassionate information.</p>
-                        <div class="welcome-chips">
-                            <button class="chip" onclick="sendChip(this)">What HIV tests are available?</button>
-                            <button class="chip" onclick="sendChip(this)">How soon after exposure should I test?</button>
-                            <button class="chip" onclick="sendChip(this)">What does a positive result mean?</button>
-                            <button class="chip" onclick="sendChip(this)">How accurate are home HIV tests?</button>
-                        </div>
-                    </div>
+                    <!-- Welcome state injected by JS -->
                 </div>
 
                 <div class="chat-input-bar">
@@ -126,7 +139,7 @@
                             placeholder="Ask a question…"
                             rows="1"
                             onkeydown="handleKey(event)"
-                            oninput="autoResize(this)"
+                            oninput="handleInput(this)"
                         ></textarea>
                         <button id="send-btn" class="btn-send" onclick="sendMessage()" title="Send (Enter)">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">

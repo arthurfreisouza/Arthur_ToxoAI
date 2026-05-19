@@ -1,5 +1,7 @@
 import os
 import shutil
+import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import List, Optional
@@ -33,6 +35,32 @@ hf_client = OpenAI(
     base_url="https://router.huggingface.co/v1",
     api_key=HF_API_TOKEN or "placeholder",
 )
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+# Simple sliding-window counter keyed by user_id.
+_rate_buckets: dict[int, list[float]] = defaultdict(list)
+RATE_LIMIT = 30       # requests
+RATE_WINDOW = 60.0    # seconds
+
+
+def _check_rate_limit(user_id: int) -> None:
+    now = time.monotonic()
+    cutoff = now - RATE_WINDOW
+    bucket = _rate_buckets[user_id]
+    # evict old timestamps
+    while bucket and bucket[0] < cutoff:
+        bucket.pop(0)
+    if len(bucket) >= RATE_LIMIT:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests — please wait a moment.",
+        )
+    bucket.append(now)
+
+
+# ── Allowed upload types ───────────────────────────────────────────────────────
+ALLOWED_CONTENT_TYPES = {"application/pdf", "text/plain"}
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 
 @asynccontextmanager
@@ -91,7 +119,7 @@ class ChatMessage(BaseModel):
     system_prompt: Optional[str] = None
     temperature: float = 0.7
     top_p: float = 0.95
-    max_tokens: int = 500
+    max_tokens: int = 800
 
 
 class ChatResponse(BaseModel):
@@ -161,11 +189,45 @@ def upload_document(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Validate content type
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only PDF and plain-text files are accepted.",
+        )
+
+    # Validate file extension (belt-and-suspenders against spoofed content-type)
+    allowed_ext = {".pdf", ".txt"}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in allowed_ext:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Only .pdf and .txt files are accepted.",
+        )
+
     UPLOAD_DIR.mkdir(exist_ok=True)
     file_path = str(UPLOAD_DIR / f"{current_user.id}_{file.filename}")
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # Stream to disk while enforcing size limit
+    written = 0
+    try:
+        with open(file_path, "wb") as buf:
+            while chunk := file.file.read(65_536):
+                written += len(chunk)
+                if written > MAX_UPLOAD_BYTES:
+                    buf.close()
+                    os.remove(file_path)
+                    raise HTTPException(
+                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                        detail="File exceeds the 10 MB limit.",
+                    )
+                buf.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {e}")
 
     try:
         create_or_update_vector_store(current_user.id, file_path)
@@ -234,7 +296,9 @@ def chat(
     current_user: User = Depends(get_current_user),
 ):
     if not HF_API_TOKEN:
-        raise HTTPException(status_code=503, detail="Chat service not configured (missing HF_API_TOKEN)")
+        raise HTTPException(status_code=503, detail="Chat service not configured")
+
+    _check_rate_limit(current_user.id)
 
     system_prompt = chat_request.system_prompt or DEFAULT_SYSTEM_PROMPT
 

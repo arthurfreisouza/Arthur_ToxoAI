@@ -14,9 +14,24 @@ VECTOR_STORE_DIR = BASE_DIR / "vector_stores"
 UPLOAD_DIR.mkdir(exist_ok=True)
 VECTOR_STORE_DIR.mkdir(exist_ok=True)
 
+# Module-level singleton — the embedding model is expensive to load (~300 MB).
+# Re-creating it on every request was a critical performance bug.
+_embeddings: HuggingFaceEmbeddings | None = None
+
+# In-memory cache of loaded FAISS stores keyed by user_id.
+# Avoids reading from disk on every chat message.
+_vector_store_cache: dict[int, FAISS] = {}
+
 
 def _get_embeddings() -> HuggingFaceEmbeddings:
-    return HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return _embeddings
+
+
+def _invalidate_cache(user_id: int) -> None:
+    _vector_store_cache.pop(user_id, None)
 
 
 def get_vector_store_path(user_id: int) -> str:
@@ -36,32 +51,40 @@ def load_and_process_document(file_path: str):
     return splitter.split_documents(documents)
 
 
-def create_or_update_vector_store(user_id: int, file_path: str):
+def create_or_update_vector_store(user_id: int, file_path: str) -> FAISS:
     vector_store_path = get_vector_store_path(user_id)
     embeddings = _get_embeddings()
     texts = load_and_process_document(file_path)
 
     if os.path.exists(vector_store_path):
-        vector_store = FAISS.load_local(
+        store = FAISS.load_local(
             vector_store_path, embeddings, allow_dangerous_deserialization=True
         )
-        vector_store.add_documents(texts)
+        store.add_documents(texts)
     else:
-        vector_store = FAISS.from_documents(texts, embeddings)
+        store = FAISS.from_documents(texts, embeddings)
 
-    vector_store.save_local(vector_store_path)
-    return vector_store
+    store.save_local(vector_store_path)
+    _vector_store_cache[user_id] = store
+    return store
 
 
-def get_retriever(user_id: int):
+def _load_vector_store(user_id: int) -> FAISS | None:
+    if user_id in _vector_store_cache:
+        return _vector_store_cache[user_id]
     vector_store_path = get_vector_store_path(user_id)
     if not os.path.exists(vector_store_path):
         return None
-    embeddings = _get_embeddings()
-    vector_store = FAISS.load_local(
-        vector_store_path, embeddings, allow_dangerous_deserialization=True
+    store = FAISS.load_local(
+        vector_store_path, _get_embeddings(), allow_dangerous_deserialization=True
     )
-    return vector_store.as_retriever(search_kwargs={"k": 5})
+    _vector_store_cache[user_id] = store
+    return store
+
+
+def get_retriever(user_id: int):
+    store = _load_vector_store(user_id)
+    return store.as_retriever(search_kwargs={"k": 5}) if store else None
 
 
 def get_relevant_context(query: str, user_id: int) -> str:
@@ -72,13 +95,14 @@ def get_relevant_context(query: str, user_id: int) -> str:
     return "\n\n".join(doc.page_content for doc in docs)
 
 
-def delete_vector_store(user_id: int):
+def delete_vector_store(user_id: int) -> None:
+    _invalidate_cache(user_id)
     vector_store_path = get_vector_store_path(user_id)
     if os.path.exists(vector_store_path):
         shutil.rmtree(vector_store_path)
 
 
-def rebuild_vector_store(user_id: int, file_paths: list[str]):
+def rebuild_vector_store(user_id: int, file_paths: list[str]) -> None:
     delete_vector_store(user_id)
     for path in file_paths:
         if os.path.exists(path):
