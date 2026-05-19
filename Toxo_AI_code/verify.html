@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Email — IA-Toxo</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .verify-container {
+            max-width: 480px;
+            margin: 80px auto;
+            padding: 40px 32px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        .verify-container h1 { font-size: 1.5rem; margin-bottom: 12px; }
+        .verify-container p  { color: #6b7280; margin-bottom: 24px; }
+        .status-icon { font-size: 3rem; margin-bottom: 16px; }
+        .btn-home {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="verify-container" id="verify-box">
+        <div class="status-icon" id="icon">⏳</div>
+        <h1 id="title">Verifying your email…</h1>
+        <p id="message">Please wait while we activate your account.</p>
+    </div>
+
+    <script>
+        const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:8000' : '';
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token');
+
+        async function verify() {
+            if (!token) {
+                setResult('error', 'Missing token', 'No verification token was found in the URL.');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/verify`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token }),
+                });
+                if (res.ok) {
+                    setResult('success', 'Email verified!', 'Your account is now active. You can log in.');
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    setResult('error', 'Verification failed', data.detail || 'The link may have expired. Request a new one from the login page.');
+                }
+            } catch {
+                setResult('error', 'Network error', 'Could not reach the server. Please try again later.');
+            }
+        }
+
+        function setResult(type, title, message) {
+            document.getElementById('icon').textContent = type === 'success' ? '✅' : '❌';
+            document.getElementById('title').textContent = title;
+            document.getElementById('message').textContent = message;
+            const box = document.getElementById('verify-box');
+            if (type === 'success') {
+                box.insertAdjacentHTML('beforeend', '<a class="btn-home" href="/">Go to login</a>');
+            }
+        }
+
+        verify();
+    </script>
+</body>
+</html>

@@ -1,27 +1,25 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from models import Base
 
-# SQLite database
-SQLALCHEMY_DATABASE_URL = "sqlite:///./users.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./users.db")
 
-# Create engine
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False}
-)
+# SQLite needs check_same_thread=False; PostgreSQL does not accept that arg
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
-# Create session
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def init_db():
-    """Initialize the database"""
+def init_db() -> None:
     Base.metadata.create_all(bind=engine)
 
 
 def get_db():
-    """Get database session"""
     db = SessionLocal()
     try:
         yield db

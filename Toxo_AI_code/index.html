@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login System</title>
+    <title>IA-Toxo</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -29,6 +29,19 @@
                     </div>
                     <button type="submit" class="btn btn-primary">Login</button>
                     <div id="login-error" class="error-message"></div>
+                    <!-- Shown when backend returns 403 "Email not verified" -->
+                    <div id="resend-section" style="display:none; margin-top: 12px;">
+                        <p style="font-size:13px; color:#6b7280; margin-bottom:8px;">
+                            Didn't receive the email? Enter your email to resend it.
+                        </p>
+                        <div class="form-group">
+                            <input type="email" id="resend-email" placeholder="your.email@example.com">
+                        </div>
+                        <button type="button" class="btn btn-primary" onclick="handleResend()" style="width:100%;">
+                            Resend verification email
+                        </button>
+                        <div id="resend-message" class="success-message"></div>
+                    </div>
                 </form>
 
                 <!-- Register Form -->
