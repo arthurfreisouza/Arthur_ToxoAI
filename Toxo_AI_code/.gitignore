@@ -30,3 +30,10 @@ Thumbs.db
 
 # Environment variables
 .env
+
+# User-uploaded files and generated vector stores
+backend_files/uploads/
+backend_files/vector_stores/
+
+# Virtual environments
+toxoenv/
