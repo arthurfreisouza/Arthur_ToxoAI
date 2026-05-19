@@ -1,6 +1,9 @@
 'use strict';
 
-const API_URL = 'https://mychatbotproject.uk';
+const API_URL   = 'https://mychatbotproject.uk';
+const AUTH_API  = `${API_URL}/api/v1/auth`;
+const DOCS_API  = `${API_URL}/api/v1/documents`;
+const CHAT_API  = `${API_URL}/api/v1/chat`;
 const HISTORY_KEY = 'toxoai_history';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -96,7 +99,7 @@ async function handleLogin(e) {
     btn.disabled = true;
     btn.textContent = 'Signing in…';
     try {
-        const res = await fetch(`${API_URL}/login`, {
+        const res = await fetch(`${AUTH_API}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password }),
@@ -129,7 +132,7 @@ async function handleRegister(e) {
     btn.disabled = true;
     btn.textContent = 'Creating account…';
     try {
-        const res = await fetch(`${API_URL}/register`, {
+        const res = await fetch(`${AUTH_API}/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, email, password }),
@@ -156,7 +159,7 @@ async function handleRegister(e) {
 // ── Load app after login ──────────────────────────────────────────────────────
 async function loadApp() {
     try {
-        const res = await fetch(`${API_URL}/me`, { headers: authHeaders() });
+        const res = await fetch(`${AUTH_API}/me`, { headers: authHeaders() });
         if (!res.ok) {
             clearToken();
             showAuthPage();
@@ -260,7 +263,7 @@ function restoreHistory() {
 // ── Documents ─────────────────────────────────────────────────────────────────
 async function loadDocuments() {
     try {
-        const res = await fetch(`${API_URL}/documents`, { headers: authHeaders() });
+        const res = await fetch(`${DOCS_API}`, { headers: authHeaders() });
         if (!res.ok) return;
         const docs = await res.json();
         renderDocList(docs);
@@ -296,7 +299,7 @@ async function uploadDocument(input) {
     formData.append('file', file);
 
     try {
-        const res = await fetch(`${API_URL}/upload`, {
+        const res = await fetch(`${DOCS_API}/upload`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${getToken()}` },
             body: formData,
@@ -336,7 +339,7 @@ async function deleteDocument(id, filename) {
     if (el) el.style.opacity = '0.4';
 
     try {
-        const res = await fetch(`${API_URL}/documents/${id}`, {
+        const res = await fetch(`${DOCS_API}/${id}`, {
             method: 'DELETE',
             headers: authHeaders(),
         });
@@ -500,7 +503,7 @@ async function sendMessage() {
     showTyping();
 
     try {
-        const res = await fetch(`${API_URL}/chat`, {
+        const res = await fetch(`${CHAT_API}`, {
             method: 'POST',
             headers: authHeaders(),
             body: JSON.stringify({

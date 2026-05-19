@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from openai import OpenAI
@@ -37,17 +37,15 @@ hf_client = OpenAI(
 )
 
 # ── Rate limiting ─────────────────────────────────────────────────────────────
-# Simple sliding-window counter keyed by user_id.
 _rate_buckets: dict[int, list[float]] = defaultdict(list)
-RATE_LIMIT = 30       # requests
-RATE_WINDOW = 60.0    # seconds
+RATE_LIMIT = 30
+RATE_WINDOW = 60.0
 
 
 def _check_rate_limit(user_id: int) -> None:
     now = time.monotonic()
     cutoff = now - RATE_WINDOW
     bucket = _rate_buckets[user_id]
-    # evict old timestamps
     while bucket and bucket[0] < cutoff:
         bucket.pop(0)
     if len(bucket) >= RATE_LIMIT:
@@ -126,19 +124,19 @@ class ChatResponse(BaseModel):
     response: str
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Routers ───────────────────────────────────────────────────────────────────
+# All user-facing routes live under /api/v1 to match the nginx proxy config:
+#   location /api/ { proxy_pass http://127.0.0.1:8000; }
+# Nginx passes the full path to the backend, so routes must include the prefix.
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-@app.get("/")
-def root():
-    return {"message": "ToxoAI API", "version": "2.0.0"}
+auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+docs_router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
+chat_router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 
-@app.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+# ── Auth routes ───────────────────────────────────────────────────────────────
+
+@auth_router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(
@@ -159,7 +157,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     return db_user
 
 
-@app.post("/login", response_model=Token)
+@auth_router.post("/login", response_model=Token)
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == user_credentials.username).first()
     if not user or not verify_password(user_credentials.password, user.hashed_password):
@@ -178,25 +176,25 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@app.get("/me", response_model=UserResponse)
+@auth_router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@app.post("/upload")
+# ── Document routes ───────────────────────────────────────────────────────────
+
+@docs_router.post("/upload")
 def upload_document(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    # Validate content type
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Only PDF and plain-text files are accepted.",
         )
 
-    # Validate file extension (belt-and-suspenders against spoofed content-type)
     allowed_ext = {".pdf", ".txt"}
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in allowed_ext:
@@ -208,7 +206,6 @@ def upload_document(
     UPLOAD_DIR.mkdir(exist_ok=True)
     file_path = str(UPLOAD_DIR / f"{current_user.id}_{file.filename}")
 
-    # Stream to disk while enforcing size limit
     written = 0
     try:
         with open(file_path, "wb") as buf:
@@ -243,7 +240,7 @@ def upload_document(
     return {"message": f"Successfully uploaded and indexed {file.filename}"}
 
 
-@app.get("/documents")
+@docs_router.get("")
 def get_documents(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -252,7 +249,7 @@ def get_documents(
     return [{"id": d.id, "filename": d.filename, "content_type": d.content_type} for d in docs]
 
 
-@app.delete("/documents/{doc_id}")
+@docs_router.delete("/{doc_id}")
 def delete_document(
     doc_id: int,
     current_user: User = Depends(get_current_user),
@@ -278,6 +275,8 @@ def delete_document(
     return {"message": "Document deleted"}
 
 
+# ── Chat route ────────────────────────────────────────────────────────────────
+
 DEFAULT_SYSTEM_PROMPT = """You are ToxoAI, an educational AI assistant specialising in HIV testing, prevention, and health information.
 
 Guidelines:
@@ -290,7 +289,7 @@ Guidelines:
 - Keep responses concise and clear"""
 
 
-@app.post("/chat", response_model=ChatResponse)
+@chat_router.post("/chat", response_model=ChatResponse)
 def chat(
     chat_request: ChatMessage,
     current_user: User = Depends(get_current_user),
@@ -323,6 +322,24 @@ def chat(
         return ChatResponse(response=completion.choices[0].message.content.strip())
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"AI service error: {e}")
+
+
+# ── Root & health (not under /api/ — nginx proxies /health directly) ──────────
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/")
+def root():
+    return {"message": "ToxoAI API", "version": "2.0.0"}
+
+
+# ── Register routers ──────────────────────────────────────────────────────────
+app.include_router(auth_router)
+app.include_router(docs_router)
+app.include_router(chat_router)
 
 
 if __name__ == "__main__":
