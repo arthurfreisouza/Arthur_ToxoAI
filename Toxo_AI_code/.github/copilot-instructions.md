@@ -1,160 +1,195 @@
-# Copilot Instructions for Arthur's RAG-Powered Chat Application 🎯
+# Copilot Instructions for ToxoAI
 
-## Global Coding Rules
-- Use emojis frequently when appropriate ✨
-- Always refer to Arthur by name, even in examples
-- When in doubt, ask clarifying questions first
-
-## Architecture Overview 🏗️
+## Architecture Overview
 
 This is a **FastAPI + LangChain RAG** application with document-backed conversational AI:
 
 - **Backend**: FastAPI REST API with SQLAlchemy ORM (SQLite)
-- **Frontend**: Vanilla JavaScript with token-based auth
-- **LLM**: HuggingFace API (Llama-3.1-8B-Instruct via OpenAI client)
-- **Vector Store**: FAISS (per-user, stored in `vector_stores/user_{id}/`)
-- **Auth**: JWT tokens (30 minute expiry) with bcrypt password hashing
+- **Frontend**: Vanilla JavaScript single-page app with token-based auth
+- **LLM**: HuggingFace API (Llama-3.1-8B-Instruct via OpenAI-compatible client)
+- **Vector Store**: FAISS (per-user, stored in `backend_files/vector_stores/user_{id}/`)
+- **Auth**: JWT tokens (60-minute expiry) with bcrypt password hashing
 
 ### Data Flow
-1. User uploads PDF/TXT → saved to `uploads/{user_id}_{filename}`
-2. Document chunked (size=1000, overlap=200) → embedded → stored in FAISS
-3. Chat queries retrieve relevant chunks via `get_relevant_context(query, user_id)`
-4. LLM receives system prompt + RAG context + user message → response
 
-## Key Files Reference 📁
+1. User uploads PDF/TXT → validated (type + 10 MB limit) → saved to `uploads/{user_id}_{filename}`
+2. Document chunked (size=1000, overlap=200) → embedded (sentence-transformers) → stored in FAISS
+3. Embedding model and FAISS stores are cached in memory after first load
+4. Chat query → top-5 relevant chunks retrieved → appended to system prompt → sent to LLM
+
+## Key Files Reference
 
 | File | Purpose |
 |------|---------|
-| `main.py` | FastAPI app, all endpoints (auth, documents, chat) |
-| `rag.py` | LangChain RAG pipeline, FAISS vector store management |
-| `auth.py` | JWT token handling, password hashing, Pydantic schemas |
-| `models.py` | SQLAlchemy `User` and `Document` models |
-| `database.py` | SQLite engine setup, session dependency for FastAPI |
-| `app.js` | Frontend auth flow, API communication, token storage |
+| `backend_files/main.py` | FastAPI app, all endpoints (auth, documents, chat), rate limiter |
+| `backend_files/rag.py` | LangChain RAG pipeline, FAISS vector store management, in-memory caches |
+| `backend_files/auth.py` | JWT token handling, password hashing, Pydantic request/response schemas |
+| `backend_files/models.py` | SQLAlchemy `User` and `Document` models |
+| `backend_files/database.py` | SQLite engine setup, `get_db` session dependency |
+| `frontend_files/app.js` | Auth flow, API communication, markdown renderer, toast notifications |
+| `frontend_files/style.css` | All styles — auth card, chat UI, toasts, mobile responsive |
+| `frontend_files/index.html` | Single-page shell — auth page + app shell |
 
-## Development Workflows 🛠️
+## Development Workflows
 
 ### Starting the Backend
-```bash
-# Activate virtual environment (if not active)
-source JMeter_env/bin/activate
 
-# Start FastAPI with auto-reload
+```bash
+# Activate the project virtual environment
+source toxoenv/bin/activate
+
+# Run from backend_files/ — the DB and relative paths depend on CWD
+cd backend_files
 python main.py
 # OR
-uvicorn main:app --reload
+uvicorn main:app --reload --port 8000
 ```
-- API available at `http://localhost:8000`
-- Swagger docs at `http://localhost:8000/docs`
-- Database auto-initializes on startup via `@app.on_event("startup")`
+
+- API: `http://localhost:8000`
+- Swagger docs: `http://localhost:8000/docs`
+- Database initialises on startup via the `lifespan` async context manager (not `@app.on_event`)
 
 ### Starting the Frontend
+
 ```bash
-# In separate terminal
+cd frontend_files
 python3 -m http.server 8080
 # Visit http://localhost:8080
 ```
-- Frontend stores JWT token in `localStorage` under key `"token"`
-- All authenticated requests include `Authorization: Bearer {token}` header
 
-### Database/Vector Store Reset
-- Delete `users.db` to reset user database
-- Delete `vector_stores/` to clear all vector stores
-- Delete `uploads/` to clear all uploaded files
+For local dev, change `API_URL` in `app.js` from `https://mychatbotproject.uk` to `http://localhost:8000`.
 
-## API Endpoints Pattern 🔌
+Frontend stores the JWT in `localStorage` under key `"token"`. All authenticated requests send `Authorization: Bearer {token}`.
 
-All authenticated endpoints follow this pattern:
+Conversation history is persisted in `localStorage` under key `"toxoai_history"`.
+
+### Database / Vector Store Reset
+
+```bash
+# Reset users and documents
+rm backend_files/users.db
+
+# Clear all vector stores (forces re-indexing on next upload)
+rm -rf backend_files/vector_stores/
+
+# Clear uploaded files
+rm -rf backend_files/uploads/
+```
+
+## API Endpoints
+
+### Public
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/health` | Returns `{"status": "ok"}` |
+| GET | `/` | API version info |
+| POST | `/register` | `username` (3–30 chars, alnum/hyphen/underscore), `password` (≥ 8 chars) |
+| POST | `/login` | Returns `{"access_token": "...", "token_type": "bearer"}` |
+
+### Authenticated (Bearer token)
+
+All authenticated endpoints use the `get_current_user` dependency which validates the JWT and returns the `User` ORM object:
+
 ```python
 @app.post("/endpoint")
 def handler(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    token = credentials.credentials
-    username = verify_token(token)  # Returns None if invalid
-    if not username:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    user = db.query(User).filter(User.username == username).first()
-    # ... rest of handler
+    # current_user is already validated — no manual token check needed
+    ...
 ```
 
-**Key endpoints:**
-- `POST /register` - Create user account
-- `POST /login` - Get JWT token
-- `GET /me` - Get current user info
-- `POST /upload` - Upload document (triggers RAG indexing)
-- `GET /documents` - List user's documents
-- `DELETE /documents/{doc_id}` - Delete & rebuild FAISS index
-- `POST /chat` - Send message with RAG context
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/me` | Returns current user info |
+| POST | `/upload` | PDF or TXT only, max 10 MB. Triggers FAISS indexing. |
+| GET | `/documents` | Lists user's documents |
+| DELETE | `/documents/{doc_id}` | Deletes file + rebuilds FAISS index from remaining docs |
+| POST | `/chat` | Rate-limited (30 req/60 s per user). Accepts `message`, `history`, `temperature`, `top_p`, `max_tokens`. |
 
-## Critical Configuration 🔑
+## Critical Configuration
 
-**MUST update for production** (currently in code):
-- `auth.py` line 14: `SECRET_KEY` for JWT signing
-- `main.py` line 38: `HF_API_TOKEN` for HuggingFace API
-- Move all secrets to `.env` file before deployment
-- Change CORS `allow_origins=["*"]` to specific domains
+All secrets are read from environment variables — never hard-coded:
 
-## LangChain/RAG Patterns ⚙️
+| Variable | File | Notes |
+|----------|------|-------|
+| `SECRET_KEY` | `auth.py` | JWT signing key — generate with `python -c "import secrets; print(secrets.token_hex(32))"` |
+| `HF_API_TOKEN` | `main.py` | HuggingFace API token |
 
-### Vector Store Management
-- **Per-user isolation**: Each user gets `vector_stores/user_{user_id}/`
-- **Update strategy**: New documents appended to existing FAISS index
-- **On deletion**: Remaining documents re-embedded to rebuild vector store
-- **Chunk settings**: 1000-char chunks with 200-char overlap (marked TODO - make configurable)
+Copy `.env.example` to `.env` and fill both values before running.
 
-### Chat Context Flow
+CORS is already scoped to `mychatbotproject.uk` and localhost — do not open it to `"*"`.
+
+## LangChain / RAG Patterns
+
+### Caching (important)
+
+Both the embedding model and FAISS stores are cached at module level in `rag.py`:
+
 ```python
-rag_context = get_relevant_context(query, user.id)  # Returns top 5 chunks
-# Context appended to system_prompt before API call to HuggingFace
+_embeddings: HuggingFaceEmbeddings | None = None   # loaded once, ~300 MB
+_vector_store_cache: dict[int, FAISS] = {}          # keyed by user_id
 ```
 
-## Important Constraints & Gotchas ⚠️
+Always call the module functions (`create_or_update_vector_store`, `get_relevant_context`, etc.) — never instantiate `HuggingFaceEmbeddings` directly in other files.
 
-1. **Hardcoded secrets**: HuggingFace API key in `main.py` - move to `.env`
-2. **FAISS persistence**: Vector stores on disk only, no backup - use version control or backup
-3. **Document tracking**: DB tracks metadata, filesystem stores actual files - keep in sync
-4. **Token expiry**: 30-minute expiry - may need frontend auto-refresh logic
-5. **No rate limiting**: Add before production deployment
-6. **Email validation**: Currently accepts any string - add proper validation if needed
-7. **File organization**: Uploaded files named `{user_id}_{filename}` - important for deletion
+The cache is invalidated (`_invalidate_cache(user_id)`) whenever a vector store is deleted or rebuilt.
 
-## Testing Quick Commands 🧪
+### Vector Store Lifecycle
+
+- **Upload**: `create_or_update_vector_store(user_id, file_path)` — appends to existing FAISS or creates new
+- **Delete**: `rebuild_vector_store(user_id, remaining_paths)` — clears disk + cache, rebuilds from remaining files
+- **Chat**: `get_relevant_context(query, user_id)` — returns top-5 chunk strings joined by `\n\n`
+
+## Rate Limiting
+
+Implemented in `main.py` as a sliding-window counter (no external dependencies):
+
+```python
+RATE_LIMIT = 30       # requests
+RATE_WINDOW = 60.0    # seconds
+```
+
+Applied only to `POST /chat`. Returns HTTP 429 with `"Too many requests"` detail when exceeded.
+
+## Testing Quick Commands
 
 ```bash
-# Register user
+# Register (password must be ≥ 8 characters)
 curl -X POST "http://localhost:8000/register" \
   -H "Content-Type: application/json" \
-  -d '{"username": "arthur", "email": "arthur@test.com", "password": "testpass"}'
+  -d '{"username": "arthur", "email": "arthur@test.com", "password": "testpass123"}'
 
 # Login
 curl -X POST "http://localhost:8000/login" \
   -H "Content-Type: application/json" \
-  -d '{"username": "arthur", "password": "testpass"}'
+  -d '{"username": "arthur", "password": "testpass123"}'
 
-# Use returned token for authenticated endpoints
+# Set token
 TOKEN="eyJ..."
-curl -X GET "http://localhost:8000/me" \
-  -H "Authorization: Bearer $TOKEN"
+
+# Get current user
+curl "http://localhost:8000/me" -H "Authorization: Bearer $TOKEN"
 
 # Upload a document
 curl -X POST "http://localhost:8000/upload" \
   -H "Authorization: Bearer $TOKEN" \
   -F "file=@path/to/document.pdf"
 
-# Send a chat message
+# Chat
 curl -X POST "http://localhost:8000/chat" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is HIV testing?", "temperature": 0.7, "top_p": 0.95, "max_tokens": 500}'
+  -d '{"message": "What is HIV testing?", "temperature": 0.7, "max_tokens": 800}'
 ```
 
-## Code Style Notes ✨
+## Code Style Notes
 
-- **FastAPI patterns**: Always use `Depends()` for dependency injection (db, auth)
-- **Validation**: Pydantic models in `auth.py` for request/response schemas
-- **Constants**: Define at module level (e.g., `UPLOAD_DIR`, `VECTOR_STORE_DIR`)
-- **RAG separation**: Keep concerns separate - load(), process(), embed()
-- **Error handling**: Always include meaningful error messages in HTTPException
-- **Database queries**: Use SQLAlchemy ORM patterns, filter() instead of raw SQL
+- **FastAPI patterns**: use `Depends()` for all dependencies (db, `get_current_user`)
+- **Schemas**: Pydantic models in `auth.py` for request/response validation
+- **Constants**: define at module level (`UPLOAD_DIR`, `VECTOR_STORE_DIR`, `RATE_LIMIT`, etc.)
+- **RAG separation**: keep load / process / embed / retrieve concerns in `rag.py` only
+- **Error handling**: meaningful `detail` strings in every `HTTPException`
+- **Database**: SQLAlchemy ORM with `filter()` — no raw SQL
