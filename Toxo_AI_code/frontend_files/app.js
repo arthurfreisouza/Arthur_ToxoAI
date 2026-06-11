@@ -397,12 +397,12 @@ function appendWelcome() {
         <div class="chat-welcome" id="chat-welcome">
             <div class="welcome-icon">🧬</div>
             <h2>Welcome to ToxoAI</h2>
-            <p>Ask me anything about HIV testing, prevention, and sexual health. I'm here to help with clear, accurate, and compassionate information.</p>
+            <p>Ask me anything about congenital toxoplasmosis — transmission during pregnancy, prenatal screening, diagnosis, and treatment. I'm here to help with clear, accurate, and compassionate information.</p>
             <div class="welcome-chips">
-                <button class="chip" onclick="sendChip(this)">What HIV tests are available?</button>
-                <button class="chip" onclick="sendChip(this)">How soon after exposure should I test?</button>
-                <button class="chip" onclick="sendChip(this)">What does a positive result mean?</button>
-                <button class="chip" onclick="sendChip(this)">How accurate are home HIV tests?</button>
+                <button class="chip" onclick="sendChip(this)">What is congenital toxoplasmosis?</button>
+                <button class="chip" onclick="sendChip(this)">How is toxoplasmosis transmitted to a fetus?</button>
+                <button class="chip" onclick="sendChip(this)">What prenatal screening tests are recommended?</button>
+                <button class="chip" onclick="sendChip(this)">How is congenital toxoplasmosis treated?</button>
             </div>
         </div>
     `);
