@@ -110,7 +110,11 @@ async function handleLogin(e) {
             $('login-form').reset();
             await loadApp();
         } else {
-            setMsg('login-msg', data.detail || 'Login failed. Please try again.', 'error');
+            const detail = Array.isArray(data.detail)
+                ? data.detail.map(d => d.msg).join(', ')
+                : (data.detail || 'Login failed. Please try again.');
+                
+            setMsg('login-msg', detail, 'error');
         }
     } catch {
         setMsg('login-msg', 'Cannot reach the server. Please try again later.', 'error');
