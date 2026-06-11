@@ -159,7 +159,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
 @auth_router.post("/login", response_model=Token)
 def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == user_credentials.username).first()
+    user = db.query(User).filter(User.email == user_credentials.email).first()
     if not user or not verify_password(user_credentials.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

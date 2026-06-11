@@ -1,0 +1,80 @@
+Request URL
+https://mychatbotproject.uk/api/v1/auth/login
+Request Method
+POST
+Status Code
+422 Unprocessable Content
+Remote Address
+[2606:4700:3036::6815:1628]:443
+Referrer Policy
+strict-origin-when-cross-origin
+alt-svc
+h3=":443"; ma=86400
+cf-cache-status
+DYNAMIC
+cf-ray
+a09486f76b690a7a-GIG
+content-length
+217
+content-type
+application/json
+date
+Wed, 10 Jun 2026 01:15:50 GMT
+nel
+{"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+permissions-policy
+geolocation=(), microphone=(), camera=()
+priority
+u=1,i
+referrer-policy
+strict-origin-when-cross-origin
+report-to
+{"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=f%2BIh0Hfdn%2BeTFT3XBP%2F%2Fx%2BXXQ5ulfRY2%2Fbxc92vg%2BFj6Ph1BoJH%2B25eft2yA1fSq8y3S53PpN6488XAV1MXVuXpAbaMF3b5J0WhbanvljRDEgHbJdTgQpTAI2WMyjwmuaZ%2BZRcazyK4L7Kgiwd6tqDHj"}]}
+server
+cloudflare
+server-timing
+cfExtPri
+strict-transport-security
+max-age=31536000; includeSubDomains
+x-content-type-options
+nosniff
+x-frame-options
+DENY
+:authority
+mychatbotproject.uk
+:method
+POST
+:path
+/api/v1/auth/login
+:scheme
+https
+accept
+*/*
+accept-encoding
+gzip, deflate, br, zstd
+accept-language
+en-GB,en-US;q=0.9,en;q=0.8,pt;q=0.7
+content-length
+43
+content-type
+application/json
+origin
+https://mychatbotproject.uk
+priority
+u=1, i
+referer
+https://mychatbotproject.uk/
+sec-ch-ua
+"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"
+sec-ch-ua-mobile
+?0
+sec-ch-ua-platform
+"Linux"
+sec-fetch-dest
+empty
+sec-fetch-mode
+cors
+sec-fetch-site
+same-origin
+user-agent
+Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36

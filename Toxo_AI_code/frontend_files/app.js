@@ -88,10 +88,10 @@ async function handleLogin(e) {
     e.preventDefault();
     clearMsg('login-msg');
     const btn = $('login-btn');
-    const username = $('login-username').value.trim();
+    const email = $('login-email').value.trim();
     const password = $('login-password').value;
 
-    if (!username || !password) {
+    if (!email || !password) {
         setMsg('login-msg', 'Please fill in all fields.', 'error');
         return;
     }
@@ -102,7 +102,7 @@ async function handleLogin(e) {
         const res = await fetch(`${AUTH_API}/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ email, password }),
         });
         const data = await res.json();
         if (res.ok) {
