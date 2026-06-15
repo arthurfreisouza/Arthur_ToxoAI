@@ -58,11 +58,32 @@ document.addEventListener('DOMContentLoaded', () => {
     $('register-form').addEventListener('submit', handleRegister);
 
     appendWelcome();
+    handleEmailVerificationRedirect();
 
     if (getToken()) {
         loadApp();
     }
 });
+
+// ── Email verification redirect ──────────────────────────────────────────────
+// After clicking the confirmation link in their email, the user lands back
+// here with ?verified=true (or =false) appended by the backend.
+function handleEmailVerificationRedirect() {
+    const params = new URLSearchParams(window.location.search);
+    const verified = params.get('verified');
+    if (verified === 'true') {
+        showToast('Email confirmed! You can now sign in.', 'success', 4000);
+        showLogin();
+    } else if (verified === 'false') {
+        showToast('That verification link is invalid or expired.', 'error', 4000);
+    }
+    if (verified !== null) {
+        params.delete('verified');
+        const newSearch = params.toString();
+        const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : '') + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+    }
+}
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
 function showLogin() {
@@ -143,9 +164,8 @@ async function handleRegister(e) {
         });
         const data = await res.json();
         if (res.ok) {
-            setMsg('register-msg', 'Account created! You can now sign in.', 'success');
+            setMsg('register-msg', data.message || 'Account created! Check your email to confirm it before signing in.', 'success');
             $('register-form').reset();
-            setTimeout(showLogin, 1800);
         } else {
             const detail = Array.isArray(data.detail)
                 ? data.detail.map(d => d.msg).join(', ')

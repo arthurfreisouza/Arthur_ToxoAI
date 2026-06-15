@@ -3,11 +3,12 @@ import shutil
 import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from openai import OpenAI
 from pydantic import BaseModel
@@ -15,16 +16,20 @@ from sqlalchemy.orm import Session
 
 from auth import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    MessageResponse,
     Token,
     UserCreate,
     UserLogin,
     UserResponse,
     create_access_token,
+    generate_verification_token,
     get_password_hash,
+    verification_token_expiry,
     verify_password,
     verify_token,
 )
 from database import get_db, init_db
+from emails import FRONTEND_URL, send_verification_email
 from models import Document, User
 from rag import UPLOAD_DIR, create_or_update_vector_store, get_relevant_context, rebuild_vector_store
 
@@ -136,25 +141,64 @@ chat_router = APIRouter(prefix="/api/v1", tags=["chat"])
 
 # ── Auth routes ───────────────────────────────────────────────────────────────
 
-@auth_router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@auth_router.post("/register", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == user.username).first():
+    if db.query(User).filter(User.username == user.username, User.is_verified == True).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Username already registered"
         )
-    if db.query(User).filter(User.email == user.email).first():
+    if db.query(User).filter(User.email == user.email, User.is_verified == True).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
+
+    # Drop any stale, unconfirmed registration that reserved this username/email,
+    # so a mistyped email (or a never-confirmed signup) doesn't permanently block retries.
+    db.query(User).filter(
+        User.is_verified == False,
+        (User.username == user.username) | (User.email == user.email),
+    ).delete(synchronize_session=False)
+
+    token = generate_verification_token()
     db_user = User(
         username=user.username,
         email=user.email,
         hashed_password=get_password_hash(user.password),
+        is_verified=False,
+        verification_token=token,
+        verification_token_expires=verification_token_expiry(),
     )
     db.add(db_user)
     db.commit()
-    db.refresh(db_user)
-    return db_user
+
+    try:
+        send_verification_email(user.email, user.username, token)
+    except Exception as e:
+        db.delete(db_user)
+        db.commit()
+        raise HTTPException(status_code=502, detail=f"Could not send verification email: {e}")
+
+    return {"message": "Account created. Check your email to confirm it before signing in."}
+
+
+@auth_router.get("/verify-email")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.verification_token == token).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification link")
+
+    expires = user.verification_token_expires
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if expires is None or expires < datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification link")
+
+    user.is_verified = True
+    user.verification_token = None
+    user.verification_token_expires = None
+    db.commit()
+
+    return RedirectResponse(url=f"{FRONTEND_URL}/?verified=true")
 
 
 @auth_router.post("/login", response_model=Token)
@@ -165,6 +209,11 @@ def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Please confirm your email before signing in.",
         )
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
