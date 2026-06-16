@@ -2,11 +2,11 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-    --brand-1: #667eea;
-    --brand-2: #764ba2;
+    --brand-1: #7c8ef5;
+    --brand-2: #9b59c9;
     --brand-grad: linear-gradient(135deg, var(--brand-1) 0%, var(--brand-2) 100%);
 
-    --bg: #0a0a0f;
+    --bg: #07070f;
     --surface: #16161d;
     --surface-2: #1e1e27;
     --surface-3: #292932;
@@ -33,7 +33,11 @@ html, body {
     height: 100%;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
-body { background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+body {
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+}
 button { font-family: inherit; cursor: pointer; }
 textarea, input { font-family: inherit; }
 
@@ -99,12 +103,12 @@ textarea, input { font-family: inherit; }
     animation: float 7s ease-in-out infinite;
 }
 .auth-page::before {
-    width: 380px; height: 380px; top: -140px; left: -120px;
-    background: radial-gradient(circle, rgba(102,126,234,.35), transparent 70%);
+    width: 500px; height: 500px; top: -180px; left: -140px;
+    background: radial-gradient(circle, rgba(124,142,245,.6), transparent 70%);
 }
 .auth-page::after {
-    width: 480px; height: 480px; bottom: -200px; right: -160px;
-    background: radial-gradient(circle, rgba(118,75,162,.35), transparent 70%);
+    width: 580px; height: 580px; bottom: -240px; right: -180px;
+    background: radial-gradient(circle, rgba(155,89,201,.55), transparent 70%);
     animation-delay: 3s;
 }
 
@@ -412,7 +416,8 @@ textarea, input { font-family: inherit; }
     flex-direction: column;
     overflow: hidden;
     background:
-        radial-gradient(ellipse 900px 480px at 50% -8%, rgba(102,126,234,.08), transparent 60%),
+        radial-gradient(ellipse 1000px 550px at 50% -5%, rgba(124,142,245,.18), transparent 65%),
+        radial-gradient(ellipse 600px 400px at 90% 100%, rgba(155,89,201,.12), transparent 60%),
         var(--bg);
 }
 
