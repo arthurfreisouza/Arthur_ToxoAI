@@ -1,6 +1,6 @@
-# ToxoAI — HIV Testing Assistant
+# ToxoAI — Congenital Toxoplasmosis Assistant
 
-A full-stack AI chat application with RAG (Retrieval-Augmented Generation) for HIV testing education. Users register, log in, optionally upload personal documents, and chat with a Llama-3.1-based assistant that uses those documents as context.
+A full-stack AI chat application with RAG (Retrieval-Augmented Generation) for congenital toxoplasmosis education. Users register, log in, optionally upload personal documents, and chat with a Llama-3.1-based assistant that uses those documents as context.
 
 ## Features
 
@@ -149,7 +149,7 @@ Password minimum: 8 characters.
 ```json
 // Request
 {
-  "message": "What HIV tests are available?",
+  "message": "How is congenital toxoplasmosis diagnosed in a newborn?",
   "history": [
     { "role": "user",      "content": "..." },
     { "role": "assistant", "content": "..." }
@@ -160,7 +160,7 @@ Password minimum: 8 characters.
 }
 
 // Response 200
-{ "response": "There are several types of HIV tests..." }
+{ "response": "Diagnosis in a newborn combines serological testing..." }
 ```
 
 Rate limit: 30 requests per 60 seconds per user. Returns HTTP 429 when exceeded.
@@ -191,7 +191,7 @@ curl -X POST "http://localhost:8000/upload" \
 curl -X POST "http://localhost:8000/chat" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is HIV testing?", "temperature": 0.7, "max_tokens": 800}'
+  -d '{"message": "What is congenital toxoplasmosis?", "temperature": 0.7, "max_tokens": 800}'
 ```
 
 ## Security Notes

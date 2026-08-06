@@ -16,3 +16,5 @@ sentence-transformers>=2.2.2
 pypdf>=3.17.4
 tiktoken>=0.5.2
 requests==2.31.0
+resend
+databases

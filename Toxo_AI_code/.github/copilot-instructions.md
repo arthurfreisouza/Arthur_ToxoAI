@@ -182,7 +182,7 @@ curl -X POST "http://localhost:8000/upload" \
 curl -X POST "http://localhost:8000/chat" \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is HIV testing?", "temperature": 0.7, "max_tokens": 800}'
+  -d '{"message": "What is congenital toxoplasmosis?", "temperature": 0.7, "max_tokens": 800}'
 ```
 
 ## Code Style Notes
