@@ -24,8 +24,12 @@ delivered independently.
 
 The application is **not** at the repository root. It lives under `Toxo_AI_code/`, with backend
 code in `Toxo_AI_code/backend_files/` and the frontend in `Toxo_AI_code/frontend_files/`. The
-offline model and evaluation work lives in a sibling `eval/` directory at the repository root and
-is **never installed on the production host** (FR-094). Paths below are repository-relative.
+offline work lives in two sibling directories at the repository root, **never installed on the
+production host** (FR-094): `eval/` holds the split, dataset, and evaluation harness as
+command-line scripts, and `training_model/` holds the fine-tuning Jupyter notebook and the locally
+saved model, trained on the owner's laptop GPU — an RTX 2070 Mobile with 8 GB of VRAM
+(FR-105–FR-107). Only the notebook is committed; the saved weights are git-ignored and reach
+production solely through the private Hugging Face repository. Paths below are repository-relative.
 
 ---
 
@@ -42,7 +46,7 @@ here changes behaviour.
 - [ ] T006 [P] Create the new backend package skeletons with `__init__.py` files: `Toxo_AI_code/backend_files/routers/`, `schemas/`, `services/`, `knowledge/`, `data/`, and `tests/`
 - [ ] T007 [P] Create `Toxo_AI_code/pytest.ini` configuring the test paths and a temp-file SQLite database per test session
 - [ ] T008 Initialise Alembic in `Toxo_AI_code/backend_files/migrations/` with `alembic.ini` pointed at the CWD-relative SQLite URL used by `backend_files/database.py`
-- [ ] T009 [P] Create the offline evaluation package skeleton `eval/__init__.py` and `eval/requirements.txt` pinning `transformers`, `peft`, `trl`, `datasets`, `accelerate`, and `huggingface_hub` (offline only — these MUST NOT appear in `Toxo_AI_code/requirements.txt`)
+- [ ] T009 [P] Create the two offline package skeletons: `eval/__init__.py` with `eval/requirements.txt` pinning the harness dependencies (`huggingface_hub`, the benchmark model clients), and `training_model/` with `training_model/requirements.txt` pinning `transformers`, `peft`, `trl`, `datasets`, `accelerate`, `jupyter`, plus a `training_model/.gitignore` excluding the saved model directory so only the notebook is ever committed (FR-105, FR-106 — none of these packages may appear in `Toxo_AI_code/requirements.txt`)
 - [ ] T010 [P] Create `Toxo_AI_code/deploy/mychatbotproject.service` as a systemd unit using `EnvironmentFile=/etc/mychatbotproject/env` with **no inline secrets** (Principle I; replaces the live unit that carries `SECRET_KEY`, `HF_API_TOKEN`, and `RESEND_API_KEY` inline)
 - [ ] T011 [P] Create `Toxo_AI_code/deploy/neo4j.md` documenting the Neo4j Community install, the 512 MB heap / 512 MB page-cache tuning from research.md R5, and the memory budget the VM must hold
 - [ ] T012 [P] Add `.env`, `backend_files/data/new_outputs.csv`, `backend_files/vector_stores/`, and `backend_files/users.db` to `.gitignore`
@@ -126,13 +130,13 @@ tuples (scenario 7) and the determinism check with the cache bypassed (scenario 
 passes when the replay is 24/24, the held-out score is reported alongside `unmeasured_classes`,
 and every explanation cites material that genuinely supports it.
 
-### Offline model strand (eval/ — never installed on the production host)
+### Offline model strand (eval/ + training_model/ — never installed on the production host)
 
 - [ ] T049 [US1] Implement the split generator `eval/split.py` applying the rule from contracts/corpus-split.md — per `final_situation` class, sort distinct input tuples by `sha256` of joined finding values, take the first *k* as test, allocate *k* by largest remainder to a 30% target, single-tuple classes ineligible — with a `--verify` mode that regenerates and diffs
 - [ ] T050 [US1] Generate and commit `eval/split.v1.json` with `source_sha256`, `totals`, `train`, `test`, and `unmeasured_classes`, asserting all seven invariants in contracts/corpus-split.md (13 train tuples / 5 test tuples; records 22 and 23 as **one** entry)
 - [ ] T051 [P] [US1] Write the split invariant tests in `eval/tests/test_split.py` — disjoint, complete, tuple-level not row-level, stratified, single-tuple classes in train and listed as unmeasured, byte-reproducible (FR-101 to FR-104, SC-021)
 - [ ] T052 [US1] Build the training dataset writer in `eval/dataset.py` that emits only the 19 training rows from the 13 training tuples, verbatim with no paraphrase or synthetic expansion, targeting the classification labels only (FR-087, SC-021, research.md R3)
-- [ ] T053 [US1] Implement the LoRA fine-tune in `eval/finetune.py` on `meta-llama/Llama-3.2-1B-Instruct` (r=8–16, small learning rate, early stopping on the held-out portion), merging the adapter and pushing to a **private** Hugging Face repository (FR-097, research.md R3)
+- [ ] T053 [US1] Implement the fine-tuning notebook `training_model/finetune_llama32_1b.ipynb` running fp16 LoRA on `meta-llama/Llama-3.2-1B-Instruct` (r=8–16, small learning rate, gradient checkpointing, early stopping on a validation slice carved from the **training** portion or a fixed epoch count — **never** on the held-out test tuples, which must not influence training in any form) on the owner's laptop GPU (RTX 2070 Mobile, 8 GB VRAM); the notebook loads `eval/split.v1.json` and the `eval/dataset.py` output without regenerating either, hard-errors if any test tuple appears in the training data, merges the adapter, saves the model under `training_model/` (git-ignored), and pushes it to a **private** Hugging Face repository (FR-097, FR-101, FR-105–FR-107, research.md R3, Principle VII)
 - [ ] T054 [US1] Document the Hugging Face Inference Endpoint configuration in `eval/ENDPOINT.md` — dedicated endpoint on the private repository, scale to zero after 15 minutes idle, greedy decoding parameters (FR-098, research.md R8)
 
 ### Classification contract and canonical text
@@ -189,7 +193,7 @@ and every explanation cites material that genuinely supports it.
 - [ ] T089 [US1] Implement the 24-case replay harness `eval/replay.py` writing a JSON result to `eval/results/`, requiring 24/24 maternal and child matches (SC-015, quickstart scenario 5)
 - [ ] T090 [US1] Implement the held-out evaluation `eval/heldout.py` over the 5 unseen tuples (records 17, 5, 13, 21, 24), refusing to emit a result that does not carry `unmeasured_classes: ["1","3","7","16","18","20"]` (SC-023, FR-103, Principle VII)
 - [ ] T091 [US1] Implement the determinism check `eval/determinism.py` submitting identical findings 20 times with the cache active and 20 times with `X-Bypass-Classification-Cache`, asserting identical output in both runs and reporting them separately (SC-016, quickstart scenario 6)
-- [ ] T092 [US1] Run the SC-015 replay and, on any mismatch, escalate the base model along the 1B → 3B → 8B ladder in `eval/finetune.py` — the gate is not to be lowered and no rules engine may be introduced (FR-084)
+- [ ] T092 [US1] Run the SC-015 replay and, on any mismatch, escalate the base model along the 1B → 3B → 8B ladder in `training_model/finetune_llama32_1b.ipynb`, switching to QLoRA at 3B since fp16 LoRA at that size exceeds the 8 GB card — the gate is not to be lowered and no rules engine may be introduced (FR-084, research.md R3)
 
 **Checkpoint**: User Story 1 is fully functional. A doctor can classify a case and check the
 reasoning; the replay, held-out, and determinism gates have been measured and reported.
@@ -339,7 +343,7 @@ the release gates.
 
 - [ ] T161 Install and tune Neo4j Community on the production VM per `Toxo_AI_code/deploy/neo4j.md`, then measure resident memory with Neo4j, the embedding model, and the application all running — if the 4 GB budget in research.md R5 does not hold, resize the VM and revisit SC-014
 - [ ] T162 Run `alembic upgrade head` against the production database at `/var/www/mychatbotproject/backend_files/users.db` as an explicit deploy step — copying files and restarting the unit does not run migrations (research.md R6)
-- [ ] T163 Copy the application to `/var/www/mychatbotproject/`, restart the service, and diff the deployed tree against the repository to confirm parity — the repository is not the deploy target
+- [ ] T163 Copy the application to `/var/www/mychatbotproject/`, restart the service, and diff the deployed tree against the repository to confirm parity — the repository is not the deploy target. Then assert FR-058: plain-HTTP requests to `mychatbotproject.uk` redirect to HTTPS and the API answers only over TLS
 - [ ] T164 Implement the identifier-injection suite `Toxo_AI_code/backend_files/tests/identifier_injection.py` submitting deliberate identifier-laden free text and asserting on **every** stored row in conversation history and `new_outputs.csv` and every operational log line, not a sample (SC-010, quickstart scenario 9)
 - [ ] T165 Run the full `pytest` suite from `Toxo_AI_code/` and confirm the unit and integration suites are green
 - [ ] T166 Execute all ten quickstart.md scenarios against the deployed system and record the outcome, treating scenarios 5, 6(b), 7, and 9 as release gates rather than smoke tests
@@ -461,4 +465,8 @@ created.
   is the only evidence of generalisation, and it speaks to three of the nine outcome classes.
 - No task may introduce a deterministic classifier ahead of the model (FR-084), load synthetic rows
   into the graph (FR-090), or place a held-out tuple in training (FR-101).
+- Fine-tuning runs **only** on the owner's laptop GPU via the `training_model/` notebook (FR-105) —
+  no task may move training to a cloud service. The saved weights under `training_model/` are
+  git-ignored (FR-106): committing them, or pushing them anywhere other than the private Hugging
+  Face repository, is a Principle I / FR-097 violation.
 - Commit after each task or logical group; stop at any checkpoint to validate a story independently.

@@ -12,6 +12,10 @@ it demonstrates. This is a validation guide, not an implementation guide — the
 - Docker, for Neo4j
 - A Hugging Face account with a token that can read the private fine-tuned repository
 - A Resend API key (or `EMAIL_DRY_RUN=1`, which logs emails instead of sending them)
+- The fine-tuned model already in the private repository. It is produced beforehand by running
+  the notebook `training_model/finetune_llama32_1b.ipynb` on the owner's laptop GPU (RTX 2070
+  Mobile, 8 GB — FR-105); the notebook saves the model under `training_model/` (git-ignored) and
+  pushes it to the private repository these scenarios read from.
 
 ```bash
 # Neo4j

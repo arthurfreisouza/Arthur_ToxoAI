@@ -1,6 +1,6 @@
 # Implementation Plan: Congenital Toxoplasmosis Clinical Knowledge Assistant
 
-**Branch**: `001-toxo-graphrag-assistant` | **Date**: 2026-08-06 | **Spec**: [spec.md](./spec.md)
+**Branch**: `001-toxo-graphrag-assistant` | **Date**: 2026-08-06 (updated 2026-08-07) | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/001-toxo-graphrag-assistant/spec.md`
 
@@ -27,8 +27,9 @@ The technical approach has four strands that can proceed largely in parallel:
    deterministically into one joined Neo4j graph plus a FAISS index, generation-tagged so a
    failed build never disturbs the one currently serving.
 3. **Model strand (offline)** — LoRA fine-tune of Llama 3.2 1B Instruct on 13 of the 18 distinct
-   input tuples, published to a private Hugging Face repository and served from a scale-to-zero
-   Inference Endpoint.
+   input tuples, run **locally on the owner's laptop GPU** (RTX 2070 Mobile, 8 GB) in a Jupyter
+   notebook kept with the saved model in `training_model/` (FR-105–FR-107), then published to a
+   private Hugging Face repository and served from a scale-to-zero Inference Endpoint.
 4. **Evaluation harness (offline)** — the fixed benchmark, the 24-case replay, and the held-out
    comparison against vanilla Llama, GPT, and Gemini, whose results are stored and surfaced to
    the Administrator but which never runs on the production host.
@@ -50,7 +51,9 @@ asking a 1-billion-parameter model to compose clinical prose freely.
 FAISS-cpu, sentence-transformers, LangChain (loaders/splitters only), pypdf, Resend, OpenAI SDK
 (used as the HTTP client for the Hugging Face router). Added — `neo4j` (official driver),
 `alembic` (schema migrations), `pytest` + `httpx` (tests). Offline only, not installed on the
-production host — `transformers`, `peft`, `trl`, `datasets`, `accelerate`, `huggingface_hub`.
+production host — `transformers`, `peft`, `trl`, `datasets`, `accelerate`, `huggingface_hub`,
+and `jupyter` for the training notebook. Training runs on the owner's laptop (RTX 2070 Mobile,
+8 GB VRAM, fp16 LoRA — research.md R3); no cloud training service.
 
 **Storage**: SQLite via SQLAlchemy ORM as the system of record (accounts, registration requests,
 conversations, messages, attributions, builds, audit, evaluation runs). Neo4j Community as the
@@ -187,22 +190,39 @@ Toxo_AI_code/
     └── neo4j.md                  # NEW — Neo4j install and memory tuning notes
 
 eval/                             # NEW — offline, never installed on the production host
+├── requirements.txt              # Harness deps only (huggingface_hub, benchmark model clients)
 ├── split.py                      # Regenerates the fixed corpus split from the CSV
-├── finetune.py                   # LoRA training on the training portion
+├── split.v1.json                 # The committed, versioned split artefact (FR-104)
+├── dataset.py                    # Emits the training dataset (19 rows / 13 tuples) for the notebook
 ├── replay.py                     # SC-015 24-case replay
 ├── heldout.py                    # SC-023 held-out evaluation
+├── determinism.py                # SC-016 check, cache-active and cache-bypassed runs
 ├── benchmark.py                  # SC-002 benchmark across all baselines
 ├── benchmark/questions.v1.json   # The fixed, versioned question set
+├── ENDPOINT.md                   # Inference Endpoint configuration (FR-098)
+├── tests/test_split.py           # Split invariant tests (FR-101–FR-104)
 └── results/                      # Run outputs, imported into the app for display
+
+training_model/                   # NEW — local fine-tuning on the owner's laptop (FR-105–FR-107)
+├── finetune_llama32_1b.ipynb     # Jupyter notebook: fp16 LoRA on the RTX 2070 Mobile (8 GB),
+│                                 #   consumes eval/split.v1.json + eval/dataset.py output,
+│                                 #   saves the merged model here, pushes it to the private HF repo
+├── requirements.txt              # transformers, peft, trl, datasets, accelerate, jupyter
+├── .gitignore                    # Excludes the saved weights — only the notebook is committed
+└── llama32-1b-toxo/              # Saved fine-tuned model (git-ignored; derives from clinical data)
 ```
 
 **Structure Decision**: Keep the existing single-project web-application layout under
 `Toxo_AI_code/` and decompose the 396-line `backend_files/main.py` into routers, schemas, and
-services as it grows. The offline work goes in a sibling `eval/` directory rather than inside
-`backend_files/`, because FR-094 requires the production host to hold no third-party model
-credentials — physical separation makes that auditable rather than merely intended. No frontend
-framework is introduced; the new surfaces (findings form, citations panel, admin console) are
-incremental additions to the existing vanilla-JS app, consistent with Principle V.
+services as it grows. The offline work goes in sibling `eval/` and `training_model/` directories
+rather than inside `backend_files/`, because FR-094 requires the production host to hold no
+third-party model credentials — physical separation makes that auditable rather than merely
+intended. Training and evaluation are split deliberately (clarified 2026-08-07): `training_model/`
+holds only the fine-tuning notebook and the locally saved model, so the release gates (replay,
+held-out, benchmark) stay reproducible command-line scripts in `eval/` rather than manually
+executed notebook cells. No frontend framework is introduced; the new surfaces (findings form,
+citations panel, admin console) are incremental additions to the existing vanilla-JS app,
+consistent with Principle V.
 
 ---
 
@@ -216,7 +236,7 @@ as a decision.
 | **Neo4j** (a persistent graph server for a ~2k-edge graph) | Owner-mandated, decision closed 2026-08-06 and recorded in the constitution as an exception | SQLite + NetworkX in memory would serve this corpus and cost nothing. Overruled by the owner; retained here only so the exception stays visible and is not mistaken for precedent |
 | **Alembic** (schema migrations) | The account table gains roles, revocation, acknowledgement, and a registration-request relationship, and five tables are added, against a live SQLite database holding real accounts. Today there is no migration path at all — `init_db()` only creates missing tables and silently ignores changed columns | Hand-written `ALTER TABLE` scripts were considered. Rejected because the deployed database is a manual copy with no backup discipline, and a silent partial migration on a clinical system is exactly the failure the constitution's error-path honesty rule exists to prevent |
 | **pytest + httpx** (test infrastructure) | The constitution requires new backend features to arrive with tests for success and failure paths, and requires a clinical regression gate before merge. Neither is possible today — the repository contains no tests and no test runner | There is no simpler alternative; the gate is mandatory and currently unenforceable |
-| **`eval/` as a separate offline package** with `transformers`/`peft`/`trl` | FR-093 through FR-096 require a comparative harness, and FR-094 forbids the production host from holding GPT or Gemini credentials | Running the harness inside the application would satisfy the functional requirement while breaking the security one. Separation is the cheaper of the two ways to satisfy both |
+| **`eval/` and `training_model/` as separate offline packages** with `transformers`/`peft`/`trl`/`jupyter` | FR-093 through FR-096 require a comparative harness, FR-094 forbids the production host from holding GPT or Gemini credentials, and FR-105 puts training on the owner's laptop GPU in a notebook | Running the harness inside the application would satisfy the functional requirement while breaking the security one. Separation is the cheaper of the two ways to satisfy both. Training and evaluation are further separated so the release gates stay scriptable (see Structure Decision) |
 
 **Not added, deliberately**: no Redis (the in-process sliding-window limiter still fits a
 single-process deployment), no PostgreSQL (writes remain single-writer), no frontend framework,
@@ -228,6 +248,8 @@ no vector database beyond the existing FAISS flat index, and no rules engine in 
 ## Phase 0 — Research
 
 Complete. Ten decisions resolved, no NEEDS CLARIFICATION remaining. See [research.md](./research.md).
+R3 was extended on 2026-08-07 with the clarified training environment: fp16 LoRA on the owner's
+RTX 2070 Mobile (8 GB), in the `training_model/` notebook, with cloud training explicitly rejected.
 
 The three that most shape the build: **R1** classification output design (model picks the class,
 canonical text is rendered from a lookup), **R2** determinism (greedy decoding plus a keyed

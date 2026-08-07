@@ -59,7 +59,7 @@ a training script.
 
 | Consumer | Obligation |
 |---|---|
-| `eval/finetune.py` | Trains on `train` only. Loading any `test` tuple is a hard error, not a filtered warning (FR-101) |
+| `training_model/finetune_llama32_1b.ipynb` | Trains on `train` only, via the dataset emitted by `eval/dataset.py`. Loading any `test` tuple is a hard error, not a filtered warning (FR-101, FR-107). The notebook consumes this artefact and MUST NOT regenerate it |
 | `eval/heldout.py` | Evaluates `test` only; reports `unmeasured_classes` with every score (SC-023) |
 | `eval/replay.py` | Runs all 24 records for SC-015, and MUST label the result as covering trained material |
 | `eval/benchmark.py` | Records `split_version` in every result so a score is traceable to what it was measured against |

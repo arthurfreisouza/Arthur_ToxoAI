@@ -76,8 +76,22 @@ active. Reporting only the cached result as evidence would be self-deception.
 ## R3 — Fine-tuning method for 13 training examples
 
 **Decision**: LoRA (via `peft` + `trl`) on `meta-llama/Llama-3.2-1B-Instruct`. Low rank
-(r=8–16), small learning rate, few epochs with early stopping evaluated on the held-out portion,
-adapter merged into the base weights and pushed to a **private** Hugging Face repository.
+(r=8–16), small learning rate, few epochs with early stopping evaluated on a **validation slice
+carved from the training portion** (or a fixed epoch count if 13 tuples cannot spare a slice) —
+**never on the held-out test tuples**, which FR-101 and Principle VII bar from influencing
+fine-tuning in any form, model selection included. The adapter is merged into the base weights
+and pushed to a **private** Hugging Face repository. The held-out tuples are touched exactly
+once, by `eval/heldout.py`, after training is finished.
+
+**Training environment (clarified 2026-08-07, FR-105–FR-107)**: training runs **locally on the
+owner's laptop GPU** — an NVIDIA GeForce RTX 2070 Mobile (Turing) with 8 GB of VRAM — inside a
+Jupyter notebook at `training_model/finetune_llama32_1b.ipynb`. At 1B parameters, fp16 LoRA fits
+the 8 GB budget with a small batch and gradient checkpointing; Turing has no bf16, so fp16 it is.
+The notebook consumes `eval/split.v1.json` and the dataset emitted by `eval/dataset.py` — it never
+regenerates either — and saves the merged model under `training_model/` (git-ignored; the weights
+derive from clinical records and are never committed or published) before pushing it to the
+private Hugging Face repository. No cloud training service is used; only the finished weights
+leave the machine.
 
 **Rationale**: The training portion is 13 distinct input tuples (19 rows). Full-parameter
 fine-tuning on that would not adapt the model, it would damage it — catastrophic forgetting of
@@ -95,8 +109,11 @@ to emit argumentation or recommendation text.
   this data volume, and `architecture-notes.md` argues it well. Rejected because fine-tuning is an
   owner requirement and a thesis contribution. FR-087 keeps few-shot prompting alongside it, so
   the retrieval-and-exemplar path exists regardless of what fine-tuning achieves.
-- *QLoRA*: available if training hardware is constrained; no benefit at 1B if a 16 GB GPU is
-  available, so not the default.
+- *QLoRA*: not needed at 1B — fp16 LoRA fits the 8 GB RTX 2070 Mobile. It becomes the default
+  only if the FR-084 ladder ever escalates to 3B, which does not fit 8 GB in fp16.
+- *Cloud training (Colab, HF AutoTrain, a rented GPU)*: rejected 2026-08-07 by owner decision —
+  the laptop GPU is sufficient at 1B, costs nothing, and keeps the clinical training data on the
+  owner's machine.
 
 **Honest expectation to carry into the plan**: with 13 training tuples, the likeliest outcome is
 strong memorisation of those tuples and weak generalisation to the 5 held out. SC-023 exists to
