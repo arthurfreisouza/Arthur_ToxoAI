@@ -1,47 +1,44 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 2.0.0 (MAJOR — a core guardrail is deliberately reversed)
+Version change: 2.0.0 → 2.1.0 (MINOR — guidance added and a mechanism restated;
+  no guardrail weakened)
 
-Bump rationale: Principle III previously stated "the assistant educates; it does
-  not diagnose" and required the system prompt to "never provide personal medical
-  diagnoses". The feature clarified on 2026-08-06 does the opposite by design: the
-  system classifies an individual patient to aid diagnosis. This is a
-  backward-incompatible redefinition of a stated principle, which the Governance
-  section defines as MAJOR. Principle II is likewise redefined rather than
-  extended.
+Bump rationale: this amendment closes the five divergences opened by the second
+  and third `/speckit-clarify` sessions of 2026-08-06, recorded in the feature
+  spec's Constitution Impact section. Nothing is removed or reversed. Principle I
+  restates the registration mechanism (the guarantee behind it is unchanged, and
+  a new rate-limit rule strengthens it); Principle VII gains the held-out split
+  and synthetic-data rules; the clinical regression gate gains a second
+  measurement. Governance defines MAJOR as removing or redefining a principle
+  backward-incompatibly, and reserves it for anything that *weakens* Principle III
+  or VII — this amendment does neither, so MINOR is the correct bump. The v2.0.0
+  rationale (the deliberate reversal of the no-diagnosis guardrail) lives in git
+  history; its substance is now carried in Principle III's own text.
 
 Modified principles:
-  - II. Per-User Data Isolation → II. Shared Corpus, Isolated Patient Records.
-    The curated knowledge corpus becomes shared and Administrator-owned. Isolation
-    is preserved, unchanged in force, for each doctor's own conversations and
-    classifications.
-  - III. Responsible AI for Health Education → III. Clinical Decision Support
-    Safety (NON-NEGOTIABLE). The no-diagnosis guardrail is removed and replaced
-    with safeguards appropriate to a classifier: reproducibility, constrained
-    output, explicit non-classification, and clinician responsibility.
-  - V. Simplicity & Minimal Dependencies — retained, with an explicit record that
-    Neo4j and GraphRAG are owner-mandated exceptions rather than justified by
-    measured need.
-  - VI. Performance Through Deliberate Caching — retargeted from per-user FAISS
-    stores to the shared graph and a multilingual embedding model.
-  - I. Security & Privacy First — extended with patient-data rules (no direct
-    identifiers, stripping on the write path, retention, erasure) and with service
-    unit files added to the secrets prohibition.
-  - IV. Explicit API Contracts & Validation — updated for the retirement of the
-    documents router and the addition of the classification contract.
+  - I. Security & Privacy First — the invitation mechanism is replaced by
+    request-then-approve. No account may exist without an explicit Administrator
+    authorisation, which is the unchanged guarantee; the public request form is
+    newly rate limited so it cannot be used as a spam relay.
+  - V. Simplicity & Minimal Dependencies — records that the `rules/` decision
+    engine is an offline labelling tool that is NOT deployed, so its presence in
+    the tree is not mistaken for a second classifier in production.
+  - VII. Training Data Integrity — extended to govern the fine-tuning corpus, not
+    only captured rows: a held-out test portion that never reaches training, a
+    split taken over distinct input tuples rather than rows, and honest reporting
+    of outcome classes the data cannot test. Synthetic-example rules added for the
+    day rule-engine augmentation is taken up.
 
-Added sections:
-  - VII. Training Data Integrity (new principle) — governs `new_outputs.csv` and
-    the risk of a model's own errors becoming tomorrow's training labels.
+Modified sections:
+  - Technology & Operational Constraints — the model is now specific: Llama 3.2 1B
+    Instruct, private Hugging Face repository, scale-to-zero Inference Endpoint,
+    with a 1B → 3B → 8B escalation path.
+  - Development Workflow & Quality Gates — the clinical regression gate now names
+    the held-out evaluation alongside the historical replay, because a green
+    replay on a corpus the model trained on no longer evidences generalisation.
 
-Removed sections: none.
-
-Corrections to previously inaccurate content:
-  - Deployment is documented as it actually works (manual copy to
-    /var/www/mychatbotproject plus a systemctl restart). The prior text described
-    an Azure DevOps pipeline that does not deploy code, which had already caused a
-    fix to be reported as live while production was unchanged.
+Added sections: none. Removed sections: none.
 
 Templates requiring updates: none — no template encodes these principles.
 
@@ -49,10 +46,10 @@ Follow-up TODOs:
   - TODO(INTENDED_USE): confirm whether this system is research/thesis evaluation
     or is supplied for use on real patients. This determines whether UK medical
     device obligations are live. Recorded in Principle III and the Regulatory
-    Posture section; must be resolved before any clinical use.
+    Posture section; must be resolved before any clinical use. Still open.
   - Secrets currently inline in /etc/systemd/system/mychatbotproject.service are
-    non-compliant with Principle I as amended and should be rotated and moved to
-    an EnvironmentFile.
+    non-compliant with Principle I and should be rotated and moved to an
+    EnvironmentFile. Still open.
 -->
 
 # ToxoAI Constitution
@@ -84,8 +81,17 @@ ToxoAI handles sensitive health data; a leak is a harm to real people, not just 
 - Authentication MUST use short-lived JWTs (60-minute expiry) verified by the shared
   `get_current_user` dependency. New authenticated endpoints MUST use this dependency — no
   hand-rolled token checks.
-- Registration MUST require a valid Administrator invitation, and new accounts MUST complete
-  email verification before they can sign in.
+- Every account MUST originate in a registration request that the Administrator has explicitly
+  authorised. Authorisation is manual and is the vetting step; no address may become an account
+  without it. Only after authorisation is an email verification link issued, and the account
+  MUST complete that verification before it can sign in. (This replaces the earlier
+  invitation-first mechanism. The guarantee is identical — no account exists without an
+  Administrator decision — but the decision now follows the request instead of preceding it.)
+- The registration request endpoint is unauthenticated and publicly reachable, so it MUST be
+  rate limited by source address and by requested email address, and a request refused by that
+  limit MUST NOT generate an Administrator notification. Without this, the Administrator's
+  inbox is a spam relay.
+- Registration responses MUST NOT reveal whether an address already has an account.
 - CORS MUST remain scoped to `mychatbotproject.uk` (and localhost for dev). Opening CORS to
   `"*"` is prohibited.
 - The system MUST NOT request, require, or provide a field for any direct patient identifier.
@@ -186,6 +192,13 @@ adopted by decision rather than by demonstrated need — the reference corpus is
 here so it is visible as a decision rather than mistaken for precedent. It does not license
 further unjustified infrastructure.
 
+Recorded clarification: the `rules/` directory holds **Toxoexpert**, a complete deterministic
+rule engine that classifies the same findings this system classifies. It is a development-time
+tool only. It MUST NOT be deployed, MUST NOT be reachable from the application, and MUST NOT
+decide any classification a doctor receives — Principle III places that accountability on the
+fine-tuned model alone. Its sole sanctioned use is offline labelling of synthetic training
+data under Principle VII, and that use is currently deferred.
+
 ### VI. Performance Through Deliberate Caching
 
 Expensive resources are loaded once and cached, never re-created per request. The embedding
@@ -201,8 +214,40 @@ retrieval and therefore every classification downstream.
 
 ### VII. Training Data Integrity
 
-Each classification event is captured to an append-only training dataset for future model
-work. That feedback loop is useful and dangerous in equal measure, so:
+This principle governs both bodies of training data: the fine-tuning corpus the model learns
+from, and the append-only dataset captured from live classifications for future model work.
+Both are useful and dangerous in equal measure.
+
+**The fine-tuning corpus and its split.** The reference corpus is 24 recorded cases holding 18
+distinct input tuples across 9 recorded outcomes. At that size, how the data is divided decides
+whether the project's primary safety test means anything.
+
+- A held-out test portion MUST be reserved and MUST NOT reach fine-tuning in any form —
+  not as a row, not as a paraphrase, not as a retrieval example.
+- The division MUST be taken over **distinct input tuples, not rows**. The corpus contains
+  records identical in their findings; splitting by row places a case in the test set that the
+  model already trained on, and the resulting score measures memorisation while appearing to
+  measure generalisation.
+- The split MUST be a fixed, versioned artefact, not regenerated per run, so that two reported
+  scores are comparable and any score can be reproduced.
+- Outcome classes represented by a single input tuple cannot appear on both sides of a split.
+  They MUST be assigned to training, and every evaluation report MUST name them as unmeasured.
+  A headline score MUST NOT be allowed to imply coverage the data cannot support.
+- Replaying the full historical corpus is a regression floor, not evidence of generalisation.
+  Reporting it as the latter is a violation of this principle.
+
+**Synthetic examples.** Rule-engine augmentation is deferred, not forbidden. If it is taken up:
+
+- Examples MUST be labelled only from a *validated* rule configuration. The example
+  configuration in `rules/` declares its own values fictitious and clinically invalid and MUST
+  NEVER be used as a labelling source — plausible-looking wrong clinical labels are worse than
+  no synthetic data.
+- Each example MUST be marked synthetic, held separately from the recorded cases, and carry the
+  configuration version that produced it.
+- Synthetic examples MUST NOT enter the knowledge graph, MUST NOT be cited to a doctor as
+  supporting material, and MUST NOT appear in any evaluation or benchmark set.
+
+**Captured live classifications.**
 
 - Captured rows MUST record the timestamp, the configuration version, and the submitting
   account, and MUST be schema-compatible with the historical reference dataset.
@@ -234,9 +279,20 @@ about whether to build it.
 ## Technology & Operational Constraints
 
 - **Stack**: Python 3 / FastAPI / Uvicorn; SQLAlchemy ORM over SQLite; python-jose (JWT) +
-  passlib (bcrypt); Neo4j for the knowledge graph; a multilingual sentence-transformer for
-  embeddings; a fine-tuned Llama-family model served over an HTTP API; Resend for email;
-  vanilla JS/HTML/CSS frontend.
+  passlib (bcrypt); Neo4j for the knowledge graph, queried with Cypher; a multilingual
+  sentence-transformer for embeddings; a fine-tuned Llama model served over HTTP; Resend for
+  email; vanilla JS/HTML/CSS frontend.
+- **Model and serving**: the base model is Llama 3.2 1B Instruct. Fine-tuned weights MUST live
+  in a **private** Hugging Face repository — they derive from clinical records and MUST NOT be
+  published — and MUST be served from an endpoint that releases compute when idle, so recurring
+  cost tracks use. The resulting cold start MUST be surfaced to the doctor as an explicit
+  "model starting" state with the submitted question preserved, never as an unexplained wait.
+  Where the fine-tuned model fails the reproducibility or fidelity gates of Principle III, the
+  sanctioned remedy is escalation of the base model (1B → 3B → 8B), never relaxation of a gate
+  and never handing classification to a rules engine.
+- **Third-party models**: the production host MUST NOT hold credentials for, or call, any model
+  service other than the one serving the fine-tuned model. Comparative benchmarking against
+  other models runs offline; only its stored results are surfaced in the application.
 - **Layout**: backend code in `backend_files/`, frontend in `frontend_files/`, infrastructure
   in `deploy/`. The backend MUST be run from inside `backend_files/` — the SQLite path and
   data directories are CWD- and module-relative.
@@ -261,7 +317,10 @@ about whether to build it.
   the running service — do not infer from the repository state.
 - **Clinical regression gate**: any change touching classification, retrieval, prompts, or the
   model MUST replay the full historical case dataset and match the recorded classifications
-  before merge. This is the project's primary safety test.
+  before merge. This is the project's primary safety test. It MUST be reported together with
+  the held-out evaluation required by Principle VII: the replay covers cases the model trained
+  on and so proves the absence of regression, while only the held-out result speaks to a case
+  the model has not seen. Quoting the replay alone as evidence the model works is prohibited.
 - **Verification before merge**: a change MUST be exercised locally — backend started from
   `backend_files/`, affected endpoints hit, and the frontend flow clicked through when UI is
   touched. New backend features MUST arrive with tests for their success and failure paths.
@@ -293,4 +352,4 @@ code is fixed or the constitution is amended — silently diverging is not an op
   `.github/copilot-instructions.md`; it MUST stay consistent with this constitution and defers
   to it on conflict.
 
-**Version**: 2.0.0 | **Ratified**: 2026-08-06 | **Last Amended**: 2026-08-06
+**Version**: 2.1.0 | **Ratified**: 2026-08-06 | **Last Amended**: 2026-08-06

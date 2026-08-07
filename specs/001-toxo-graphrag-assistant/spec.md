@@ -12,7 +12,7 @@
 
 ## Overview
 
-`mychatbotproject.uk` becomes a closed, invitation-only clinical decision-support tool for doctors managing suspected congenital toxoplasmosis. A doctor signs in and either submits a patient's findings to receive a classification with its reasoning, or asks a free-text question and receives an educational answer. Both are grounded in — and visibly attributed to — a single curated body of knowledge: the project thesis and the historical set of classified clinical case records.
+`mychatbotproject.uk` becomes a closed, administrator-approved clinical decision-support tool for doctors managing suspected congenital toxoplasmosis. A doctor signs in and either submits a patient's findings to receive a classification with its reasoning, or asks a free-text question and receives an educational answer. Both are grounded in — and visibly attributed to — a single curated body of knowledge: the project thesis and the historical set of classified clinical case records.
 
 This changes the current model of the product in three structural ways, all deliberate and all with governance consequences settled in constitution v2.0.0 (see **Constitution Impact** below):
 
@@ -25,6 +25,8 @@ This changes the current model of the product in three structural ways, all deli
 - Doctors uploading their own documents or building private knowledge bases.
 - Multi-tenant or multi-institution separation; there is one corpus and one administrator.
 - Mobile-native applications; a responsive browser experience is sufficient.
+- Deploying the `rules/` decision engine. It is used offline to label synthetic fine-tuning data and never classifies a doctor's submission.
+- Publishing the fine-tuned model weights. The repository is private.
 
 ### What this system is
 
@@ -41,6 +43,14 @@ Per the Session 2026-08-06 clarification below, this is a **diagnostic decision-
 - Q: Should the system accept and store direct patient identifiers alongside the clinical findings, or only the de-identified findings it needs to classify? → A: Option A — de-identified findings only. The system never requests a direct identifier, detects any present in free text, and strips them on the write path so none reach conversation history or the training dataset.
 - Q: Which language should the assistant reply in — the language the doctor wrote in, always Portuguese, or always English? → A: Option A — reply in the doctor's language, while always displaying the canonical Portuguese classification, argumentation, and recommendation text verbatim alongside any translation, so the clinical wording stays auditable and identical to the dataset.
 - Q: Should doctors still be able to upload their own documents, as the current live system allows, or does that feature get removed in favour of the single curated knowledge base? → A: Option A — one curated corpus, curated by the Administrator alone. Doctors must not be able to upload files. The existing per-user upload capability in the deployed system is retired.
+- Q: Should registration stay invitation-only, or should a doctor be able to submit a registration request that the Administrator approves? → A: Option A — request-then-approve replaces invitations. A clinician submits a registration request; the Administrator is notified by email at `arthurfelipereis11022018@gmail.com`; the Administrator manually authorises or rejects it; only on authorisation is a verification link sent to the doctor; only after the doctor confirms that address can they sign in. The invitation mechanism is retired.
+- Q: The validated rule configuration is absent from the repository and from the machine, so rule-engine augmentation cannot proceed — should the fine-tuning work block until it arrives? → A: No. The work MUST NOT block. Fine-tuning proceeds on the 24 historical records as they stand. Rule-engine augmentation (FR-088) is deferred to an optional later enhancement, conditional on the validated configuration being supplied.
+- Q: With the rule engine unavailable, should the 24 records be expanded by rewording them before fine-tuning, or fed in as they are? → A: Fed in as they are. No paraphrase expansion, no synthetic generation. The 24 recorded rows are the fine-tuning corpus verbatim.
+- Q: If the model trains on all 24 records, the replay test over those same records no longer measures generalisation — how should that be handled? → A: Split the corpus 70% training / 30% test, holding the test portion out of training entirely. The held-out portion is the honest generalisation measure.
+- Q: How should the fine-tuned model be served from Hugging Face, given the £40/month operating ceiling? → A: Option A — the weights live in a **private** Hugging Face repository and are served by a dedicated Inference Endpoint configured to **scale to zero when idle**, so cost tracks actual use by a small clinician group. The cold start after idle is an accepted trade-off and is made explicit in SC-003 rather than hidden.
+- Q: Should the comparative evaluation harness that benchmarks the fine-tuned model against vanilla Llama, GPT, and Gemini run offline or inside the deployed application? → A: Option A — an offline command-line harness in the repository runs the SC-002 benchmark against each model and writes a comparison report; the Administrator views the stored results in the application. No third-party model credentials are held on the production host, and benchmark API spend sits outside the SC-014 operating ceiling.
+- Q: Should synthetic training cases be generated by running the deterministic rule engine in `rules/`, and what is it allowed to touch? → A: Option A — enumerate valid input combinations, label them with the `rules/` engine, and use them as fine-tuning data only. Every synthetic row is marked as synthetic and held in a file separate from the 24 real records; synthetic cases are excluded from the Neo4j knowledge graph and from every evaluation set, so the replay and benchmark gates stay honest. This depends on the validated `decision_config.yaml` being supplied, since the committed example config is explicitly fictitious.
+- Q: If the fine-tuned 1-billion-parameter Llama cannot reproduce all 24 recorded historical classifications exactly, what should the system do? → A: Option B — the fine-tuned model alone must pass the gate. The base model is Llama 3.2 1B Instruct; if it cannot reach 100% replay after fine-tuning, escalate to a larger Llama (3B, then 8B) and accept the higher hosting cost. No rules engine is introduced as a classifier. SC-015 and SC-016 remain unlowered release gates.
 
 ---
 
@@ -108,19 +118,22 @@ The administrator adds, replaces, or removes source material and rebuilds the kn
 
 ### User Story 4 - Administrator controls who gets access (Priority: P2)
 
-Access is closed. The administrator invites a named clinician by email address; only an invited address can complete registration, and the account becomes usable only after the invitee confirms that address. The administrator can see all accounts and revoke any of them, and revocation takes effect promptly rather than at the end of a long-lived session.
+Access is closed, and it opens in two steps. A clinician submits a registration request; the administrator is notified by email and manually authorises or rejects it; only on authorisation does the clinician receive a verification link, and only after confirming that address can they sign in. The administrator can see all accounts and revoke any of them, and revocation takes effect promptly rather than at the end of a long-lived session.
 
-**Why this priority**: The tool is aimed at clinicians and answers clinical questions. Open self-registration would put it in front of an unintended audience, which is both a safety problem and a credibility problem. It is P2 rather than P1 only because a hand-provisioned account is enough to validate Story 1.
+**Why this priority**: The tool is aimed at clinicians and answers clinical questions. Unmediated self-registration would put it in front of an unintended audience, which is both a safety problem and a credibility problem — manual authorisation is what keeps it closed. It is P2 rather than P1 only because a hand-provisioned account is enough to validate Story 1.
 
-**Independent Test**: Attempt to register with an uninvited address and confirm rejection. Invite an address, complete registration and email confirmation, sign in successfully, then revoke the account and confirm access stops.
+**Independent Test**: Submit a registration request, confirm the administrator is notified and that no sign-in is possible while the request is pending. Authorise it, confirm the verification email arrives, confirm the address, sign in successfully, then revoke the account and confirm access stops. Separately submit a request and reject it, confirming no account becomes usable.
 
 **Acceptance Scenarios**:
 
-1. **Given** an email address that has not been invited, **When** someone attempts to register with it, **Then** registration is refused and no account is created.
-2. **Given** an invited address, **When** the invitee registers and confirms the address, **Then** they can sign in and use the assistant.
-3. **Given** an invited address whose invitation has expired, **When** the invitee attempts to register, **Then** registration is refused and they are told to request a new invitation.
-4. **Given** an active doctor account, **When** the administrator revokes it, **Then** the doctor can no longer sign in and any in-flight session stops being honoured within the stated revocation window.
-5. **Given** a signed-in doctor, **When** they attempt any administrative action, **Then** it is refused.
+1. **Given** a submitted registration request, **When** the administrator has not yet authorised it, **Then** the requester cannot sign in and receives no verification link.
+2. **Given** a registration request is submitted, **When** it is recorded, **Then** an email notification is dispatched to the administrator's registered address containing the requester's details and the means to authorise or reject it.
+3. **Given** a pending request, **When** the administrator authorises it, **Then** a single-use verification link is sent to the requested address, and the account becomes usable only once that link is followed.
+4. **Given** a pending request, **When** the administrator rejects it, **Then** no account is created and the address can be used to request again later.
+5. **Given** an authorised request whose verification link has expired unused, **When** the requester attempts to follow it, **Then** activation is refused and they are told how to obtain a new link.
+6. **Given** an active doctor account, **When** the administrator revokes it, **Then** the doctor can no longer sign in and any in-flight session stops being honoured within the stated revocation window.
+7. **Given** a signed-in doctor, **When** they attempt any administrative action, **Then** it is refused.
+8. **Given** repeated registration requests from the same source, **When** they exceed the permitted rate, **Then** further requests are refused without notifying the administrator each time.
 
 ---
 
@@ -180,7 +193,12 @@ A doctor's conversations persist across sessions. They can list past conversatio
 
 - A session expires while an answer is being generated: the doctor is prompted to sign in again and does not lose the question they submitted.
 - An account is revoked mid-session: the next request is refused.
+- The model endpoint is idle when a question arrives: the doctor is told the model is starting, their question is held rather than discarded, and the wait is bounded and ends in either an answer or an explicit failure.
 - The language model is unavailable or times out: the doctor sees an explicit failure, never a fabricated answer.
+- A registration request is submitted for an address that already has an account: no duplicate account is created and the response reveals nothing about whether that address is already registered.
+- Registration requests arrive in bulk: the rate limit refuses them and the Administrator receives no notification for the refused ones.
+- The Administrator's notification email fails to send: the request is still recorded as pending and visible in the administration view, so it cannot be lost with the email.
+- A verification link is followed twice: the second attempt is refused as already used.
 - A doctor submits questions faster than the rate limit permits: further requests are refused with a clear, temporary message.
 - Two browser tabs from the same doctor operate on the same conversation: neither corrupts the other's history.
 
@@ -195,15 +213,17 @@ A doctor's conversations persist across sessions. They can list past conversatio
 - **FR-001**: System MUST support exactly two roles — Administrator and Doctor — and MUST assign every account exactly one of them.
 - **FR-002**: System MUST restrict all knowledge-base curation, account administration, and configuration capabilities to the Administrator role.
 - **FR-003**: System MUST provide the Doctor role with question submission, conversation management, and export, and MUST refuse it every administrative capability.
-- **FR-004**: System MUST refuse registration for any email address that does not hold a valid, unexpired, unused invitation issued by the Administrator.
-- **FR-005**: System MUST require an invitee to confirm ownership of the invited email address before the account can be used to sign in.
-- **FR-006**: System MUST expire unused invitations after 14 days and MUST allow the Administrator to reissue them.
+- **FR-004**: System MUST require every account to originate in a registration request that the Administrator has explicitly authorised, and MUST refuse sign-in to any address whose request is pending, rejected, or absent. No address may become an account without that authorisation.
+- **FR-005**: System MUST notify the Administrator by email, at the Administrator's registered address, whenever a registration request is submitted, and MUST include in that notification the requester's submitted details and the means to authorise or reject the request.
+- **FR-085**: System MUST allow the Administrator to reject a registration request, MUST create no account when a request is rejected, and MUST allow the same address to submit a further request afterwards.
+- **FR-086**: System MUST rate-limit registration requests by source address and by requested email address, and MUST NOT dispatch an Administrator notification for requests refused by that limit.
+- **FR-006**: System MUST send a single-use email verification link only after the Administrator has authorised the request, MUST require the requester to follow that link before the account can be used to sign in, MUST expire the link after 14 days, and MUST allow a fresh link to be issued for an already-authorised request.
 - **FR-007**: System MUST authenticate sign-in with an email address and a password of at least 12 characters, and MUST reject bad credentials without revealing which element was wrong.
 - **FR-008**: System MUST end an idle session after 60 minutes and require re-authentication.
 - **FR-009**: System MUST allow the Administrator to revoke any Doctor account, and revocation MUST take effect for new requests within 5 minutes.
 - **FR-010**: System MUST allow a doctor to reset a forgotten password through a confirmation sent to their registered address; reset links MUST be single-use and expire within 1 hour.
 - **FR-011**: System MUST rate-limit both authentication attempts and question submissions per account, and MUST refuse excess attempts with a clear, temporary message.
-- **FR-012**: System MUST record an auditable event for every sign-in, sign-in failure, invitation, revocation, and administrative change to the knowledge base, retaining at least the actor, the action, and the time.
+- **FR-012**: System MUST record an auditable event for every sign-in, sign-in failure, registration request, authorisation or rejection of a request, revocation, and administrative change to the knowledge base, retaining at least the actor, the action, and the time.
 
 #### Knowledge sources and ingestion
 
@@ -297,6 +317,33 @@ A doctor's conversations persist across sessions. They can list past conversatio
 - **FR-066**: System MUST produce identical output for identical input; the same findings MUST NOT yield different classifications on different occasions.
 - **FR-067**: System MUST prompt the doctor for any missing required finding rather than inferring, defaulting, or guessing it.
 - **FR-068**: System MUST NOT invent a classification, argumentation, or recommendation outside the defined value sets.
+- **FR-084**: System MUST produce its classifications from the fine-tuned model itself, with no deterministic classifier deciding the outcome ahead of it. Where the fine-tuned model fails the historical-replay gate (SC-015) or the determinism gate (SC-016), the remedy MUST be a larger base model in the sequence 1B → 3B → 8B, and MUST NOT be a relaxation of either gate.
+
+#### Model serving
+
+- **FR-097**: System MUST hold the fine-tuned model weights in a private repository, not a public one. The weights are derived from clinical records and MUST NOT be published.
+- **FR-098**: System MUST serve the fine-tuned model from an endpoint that releases its compute when idle, so that recurring cost tracks actual use rather than elapsed time.
+- **FR-099**: System MUST tell the doctor that the model is starting when a request arrives to an idle endpoint, and MUST keep the submitted question rather than discarding it while the endpoint starts.
+- **FR-100**: System MUST surface an endpoint that fails to start, or that starts and then times out, as an explicit failure under FR-040, and MUST NOT answer from an un-grounded fallback.
+
+#### Comparative evaluation
+
+- **FR-093**: System MUST provide a repeatable evaluation harness that runs the SC-002 benchmark and the SC-015 historical replay against the fine-tuned model and against each baseline — the same Llama base model without fine-tuning, and the legacy GPT and Gemini models the site previously used — and reports their results side by side.
+- **FR-094**: System MUST run that harness outside the deployed application. The production host MUST NOT hold credentials for, or make requests to, any third-party model service other than the one serving the fine-tuned model.
+- **FR-095**: System MUST record each evaluation run with the date, the benchmark version, the model identifiers and versions compared, and the per-model scores, and MUST make the stored results visible to the Administrator within the application.
+- **FR-096**: System MUST hold the benchmark question set fixed across runs, so that scores from different runs are comparable, and MUST version it when it changes.
+
+#### Fine-tuning corpus and split
+
+- **FR-087**: System MUST fine-tune on the 24 historical records in `logs/request-logs.csv` exactly as recorded, without paraphrase expansion, synthetic generation, or any other derived example, and MUST pair the fine-tuned model with retrieval and few-shot prompting rather than relying on fine-tuning alone, given the corpus size.
+- **FR-101**: System MUST divide the corpus into a training portion of approximately 70% and a held-out test portion of approximately 30%, and MUST NOT expose the test portion to fine-tuning in any form.
+- **FR-102**: System MUST perform that division over the **18 distinct input tuples**, not over the 24 rows. Records 22 and 23 are byte-identical in their findings; splitting by row would place a case in the test set that the model had already trained on, and the test result would be meaningless.
+- **FR-103**: System MUST stratify the division by recorded outcome so that outcome classes holding two or more distinct input tuples are represented on both sides of it. Six of the nine recorded outcomes hold exactly one distinct input tuple; those MUST be assigned to the training portion, and the specification records that they are consequently **untested** — see SC-023.
+- **FR-104**: System MUST record the split as a fixed, versioned artefact listing which input tuples fall on each side, so that every evaluation run measures the same thing and a reported score can be reproduced. The split MUST NOT be regenerated randomly per run.
+- **FR-091**: System MUST exclude any future derived or synthetic example from every evaluation and benchmark set, so those sets always measure performance on material the model was not trained to reproduce by construction.
+- **FR-090**: System MUST NOT load derived or synthetic examples into the knowledge graph, and MUST NOT allow any answer or classification to cite a generated case as supporting material. Attribution is reserved for the thesis and the historical records.
+- **FR-088**: System MAY, as a later optional enhancement, derive additional fine-tuning examples by enumerating valid combinations of the 14 input findings and labelling them with the deterministic rule engine in `rules/`. This is **deferred and non-blocking**: it is contingent on a validated rule configuration being supplied, and no part of the delivery depends on it.
+- **FR-092**: System MUST NOT generate any training example from the example configuration committed to `rules/`, whose own header declares its values fictitious and clinically invalid. If FR-088 is ever taken up, it MUST use a validated configuration, and MUST mark each derived example as synthetic, hold it in a file distinct from the historical records, and record the configuration version that produced it.
 
 #### Training data capture
 
@@ -311,8 +358,10 @@ A doctor's conversations persist across sessions. They can list past conversatio
 ### Key Entities
 
 - **Account**: A person who can sign in. Holds an email address, a role (Administrator or Doctor), a confirmation state, and an active-or-revoked state. Exactly one Administrator exists.
-- **Invitation**: An Administrator's grant of registration rights to a specific email address. Has an issue time, an expiry, and a used-or-unused state. Registration is impossible without one.
+- **Registration Request**: A clinician's application for access, holding the requested email address, the details they supplied, a submission time, and a state of pending, authorised, or rejected. It carries the Administrator's decision and the time of that decision. No Account may exist without an authorised Request behind it. Once authorised it carries a single-use verification token with its own expiry.
 - **Source Document**: A narrative document admitted to the corpus — initially the project thesis. Carries a title, an ingestion time, and a revision marker.
+- **Corpus Split**: The fixed, versioned assignment of each of the 18 distinct input tuples to either the training portion or the held-out test portion. Stratified by recorded outcome, stable across evaluation runs, and the artefact any reported score is quoted against.
+- **Synthetic Training Case**: One machine-generated input combination with the classification, argumentation, and recommendation the `rules/` engine assigns to it. Carries a synthetic marker and the rule-configuration version. **Not produced in this delivery** — defined here because FR-088 keeps it available as a later enhancement. If ever produced: fine-tuning only, never indexed, never cited, never evaluated against.
 - **Case Record**: One historical clinical case: its serological and clinical findings, gestational timing, the maternal and child classifications assigned to it, and the argumentation and recommendation recorded for it. Stably identified so answers can cite it.
 - **Knowledge Unit**: The smallest attributable piece of retrievable knowledge — a passage of a Source Document, or a whole Case Record. Always carries an attribution back to its origin.
 - **Concept**: A clinical entity extracted from the corpus — a serological marker and result, a classification, a finding, an investigation, a recommendation, a gestational window.
@@ -332,24 +381,27 @@ A doctor's conversations persist across sessions. They can list past conversatio
 
 - **SC-001**: At least 95% of in-scope answers carry at least one attribution, and every attribution a doctor expands resolves to source material that genuinely supports the claim it is attached to.
 - **SC-002**: On a reviewer-built benchmark of at least 30 questions with known answers in the corpus, at least 85% of answers are judged factually consistent with the corpus by a domain reviewer, and no answer in the benchmark contains a fabricated citation.
-- **SC-003**: 95% of questions receive a complete answer within 20 seconds of submission, and every question shows visible progress within 2 seconds.
+- **SC-003**: With the model endpoint already warm, 95% of questions receive a complete answer within 20 seconds of submission, and every question shows visible progress within 2 seconds. The first question after an idle period is exempt from the 20-second target while the endpoint starts, but MUST still show progress within 2 seconds, MUST state that the model is starting, and MUST complete within 3 minutes or fail explicitly.
 - **SC-004**: At least 95% of deliberately out-of-scope questions are declined rather than answered.
 - **SC-005**: At least 95% of questions the corpus cannot support produce an explicit statement to that effect rather than an unsupported answer.
-- **SC-006**: An invited doctor can go from receiving the invitation to reading their first attributed answer in under 5 minutes without assistance.
+- **SC-006**: An authorised doctor can go from receiving the verification email to reading their first attributed answer in under 5 minutes without assistance, and the Administrator's notification of a registration request arrives within 5 minutes of submission.
 - **SC-007**: No account can read another account's conversations, and no Doctor account can perform an administrative action; verified by exercising every administrative capability against a Doctor account.
 - **SC-008**: A full rebuild of the corpus completes unattended within 60 minutes and reports its statistics.
 - **SC-009**: A failed build never leaves doctors unable to ask questions; verified by injecting a failure at each stage of the build and confirming answers still work.
 - **SC-010**: Stored conversation history and the captured training dataset contain no direct patient identifiers, and operational logs contain no submitted or returned content; verified by inspecting every stored row against a set of deliberate identifier-injection test submissions, not by sampling.
 - **SC-011**: Every classified result states that clinical judgement rests with the treating clinician; verified across the benchmark set.
-- **SC-015**: Replaying all 24 historical cases through the system reproduces the recorded maternal and child classifications for 100% of them. The recorded outputs are deterministic, so this is the correctness bar regardless of how the classification is produced; any mismatch blocks release until it is either fixed or signed off in writing after clinical review.
+- **SC-015**: Replaying all 24 historical cases through the system reproduces the recorded maternal and child classifications for 100% of them. The recorded outputs are deterministic, so this is the correctness bar regardless of how the classification is produced; any mismatch blocks release until it is either fixed or signed off in writing after clinical review. This measures the whole corpus, training portion included, and is therefore a regression floor rather than evidence of generalisation — SC-023 supplies that evidence.
+- **SC-023**: On the held-out 30% of distinct input tuples, which the model never saw during fine-tuning, the maternal and child classifications are reproduced correctly and the result is reported as the headline generalisation figure alongside SC-015. The six outcome classes represented by a single input tuple sit entirely in the training portion and are therefore **not measured by this criterion**; the evaluation report MUST name them explicitly rather than let a high aggregate score imply coverage the data cannot support.
 - **SC-016**: Submitting identical findings on 20 separate occasions yields an identical classification every time. Variation across identical inputs is a defect, not acceptable model behaviour.
 - **SC-019**: 100% of returned classifications, argumentations, and recommendations fall within the permitted value sets, verified by output validation on every response — never by sampling.
 - **SC-020**: Every returned classification is accompanied by an explanation citing at least one thesis passage or historical case, and those citations resolve to material that genuinely supports the stated classification in at least 95% of a reviewed sample.
+- **SC-022**: The evaluation harness produces, for the fine-tuned model and for every baseline, a score on the same benchmark question set and the same historical replay, and the fine-tuned model's factual-consistency score is at least as high as the best baseline's. Baseline API spend is reported separately from operating cost and does not count against SC-014.
+- **SC-021**: The fine-tuning corpus contains only the 24 recorded rows — no paraphrased, derived, or synthetic example — and no held-out test tuple appears anywhere in the training data; verified by comparing the training file against the recorded dataset and against the versioned split, not by sampling.
 - **SC-017**: 100% of classification events are captured to the training dataset with their rule configuration version, and the captured file remains loadable alongside the historical dataset without transformation.
 - **SC-018**: Findings that fall outside the parameterised rules are reported as "no classification could be determined" in 100% of cases, and never as a clinical conclusion.
 - **SC-012**: A revoked account is refused within 5 minutes of revocation.
 - **SC-013**: The tool remains available for questions at least 99% of the hours in a calendar month, excluding announced maintenance.
-- **SC-014**: Recurring monthly cost to operate the deployed system stays under £40 at the expected load of a small clinician group.
+- **SC-014**: Recurring monthly cost to operate the deployed system stays under £40 at the expected load of a small clinician group, counting the host, Neo4j, and the scale-to-zero model endpoint at its measured idle and active hours. One-off fine-tuning cost and baseline-benchmark API spend are excluded and reported separately.
 
 ---
 
@@ -368,7 +420,9 @@ These are reasonable defaults adopted where the feature description did not spec
 
 **Users and access**
 
-- Access is invitation-only because the audience is qualified clinicians. Verification of medical registration is out of scope for this version — the Administrator's decision to invite constitutes the vetting step.
+- Access is closed because the audience is qualified clinicians, but the gate is manual authorisation rather than prior invitation. Verification of medical registration is out of scope for this version — the Administrator's decision to authorise a request constitutes the vetting step, and the request form must therefore collect enough for that judgement to be made.
+- The Administrator's notification address is `arthurfelipereis11022018@gmail.com`. It is configuration, not a constant in code.
+- Because the request form is publicly reachable, it is an abuse surface. FR-086 rate-limits it so the Administrator's inbox cannot be used as a spam channel.
 - There is exactly one Administrator, held by the project owner, with no self-service path to that role.
 - The expected population is a small group of clinicians (order of tens), not a public audience. Success criteria are sized accordingly.
 - Doctors use a current desktop browser on a reliable connection. The interface is responsive, but the design target is desktop.
@@ -378,14 +432,19 @@ These are reasonable defaults adopted where the feature description did not spec
 - `logs/request-logs.csv` is the structured case-record dataset referred to in the description. It holds 24 records across 29 columns, each combining serological and clinical findings with the maternal and child classifications and the recorded argumentation and recommendation. It is a structured dataset rather than a folder of loose text documents, and this specification treats it as such — this is what motivates the graph representation in FR-026 through FR-030.
 - `text/monografia.pdf` is the project thesis referred to as the second knowledge source. (The description places it at the project root; it is at `text/`.)
 - `text/IA-Toxo_Pitch.pdf` exists alongside the thesis but is presentation material, not clinical knowledge, and is excluded from the corpus.
+- `rules/` is not a data directory. It holds **Toxoexpert**, a working deterministic clinical rule engine (Django REST backend, Angular frontend, YAML-configured decision tables) that classifies the same 14 findings this system classifies. It is not deployed and it does not classify anything a doctor submits (FR-084).
+- **Rule-engine augmentation is deferred and is not on the delivery path.** Verified on 2026-08-06: the only configuration present is `rules/backend/decision/config/decision_config.example.yaml`, whose own header declares its values fictitious and clinically invalid; no validated `decision_config.yaml` exists in the repository or on the deployment host. Rather than wait for it, fine-tuning proceeds on the 24 recorded rows (FR-087). FR-088 remains available as a later enhancement if the validated configuration is ever supplied.
+- **The corpus is thin, and the specification does not pretend otherwise.** The 24 rows collapse to **18 distinct input tuples** across **9 distinct recorded outcomes**. Records 22 and 23 are identical in their findings, which is why the split is defined over tuples rather than rows (FR-102). Six of the nine outcomes are represented by exactly one input tuple, so they cannot appear on both sides of a split; they stay in training and are untested (FR-103, SC-023). Seven of the 24 rows are `Situação não parametrizada`, which at least means refusal is well represented.
+- Fine-tuning a 1-billion-parameter model on roughly a dozen distinct examples will tend to memorise rather than generalise. This is an accepted, owner-directed trade-off taken to avoid blocking on the missing configuration. The held-out 30% (SC-023) exists precisely to make the extent of that memorisation visible rather than assumed, and the model-escalation ladder in FR-084 remains the response if the gates are not met.
 - The corpus is small and grows slowly. Rebuilds are infrequent, and a full rebuild is acceptable in place of incremental update.
 - The historical case records are treated as a record of past classification practice, not as ground truth. Answers attribute to them accordingly.
 - The corpus contains no patient identifiers; the case records are already de-identified.
 
 **Fixed architectural constraints (owner-mandated, not open to planning trade-off)**
 
-- Classification and explanation are produced by a **fine-tuned LLM using GraphRAG**, not by a rules engine.
-- The knowledge graph is stored in **Neo4j**.
+- Classification and explanation are produced by a **fine-tuned LLM using GraphRAG**, not by a rules engine. The model alone is accountable for the classification; no deterministic classifier sits in front of it.
+- The base model is **Llama 3.2 1B Instruct**, fine-tuned on the project dataset and served from **Hugging Face**. 1B is the owner's target for cost reasons. If the fine-tuned 1B model cannot reproduce all 24 historical classifications (SC-015) or cannot classify identical findings identically (SC-016), the response is to **escalate the base model — 1B → 3B → 8B** — and absorb the higher hosting cost, not to lower the gate or to hand classification to a rules engine.
+- The knowledge graph is stored in **Neo4j**, queried with **Cypher**.
 - The assistant **both diagnoses and educates** — it classifies the patient and explains the reasoning, and it also answers free-text educational questions (User Stories 1 and 2 respectively).
 
 These were decided on 2026-08-06 and supersede the alternatives explored in `architecture-notes.md`. Planning should treat them as given and design the safeguards around them (output validation against the permitted value sets, deterministic decoding, and historical-case replay) rather than reopening the choice.
@@ -395,8 +454,10 @@ These were decided on 2026-08-06 and supersede the alternatives explored in `arc
 - The system runs on the existing single-host deployment behind the existing reverse proxy at `mychatbotproject.uk`, with encryption terminated there.
 - Neo4j adds a persistent service to a host that currently runs only the application and nginx. Its memory footprint and operating cost must be accommodated within the deployment, and SC-014's cost ceiling may need revisiting as a result.
 - A single administrator operating one host means announced maintenance windows are acceptable; the availability target reflects that.
-- Answer generation depends on an external model service. Its unavailability is an expected failure mode, handled by FR-040, not designed away.
-- The fine-tuned model referred to in the description is a component of answer generation. This specification states what answers must do; it does not assume how fine-tuning and retrieval divide that work, which is a planning decision.
+- Answer generation depends on an external model service — a Hugging Face Inference Endpoint serving the private fine-tuned repository. Its unavailability is an expected failure mode, handled by FR-040, not designed away.
+- The endpoint scales to zero, so the first request after an idle period pays a cold start. This is an accepted cost trade-off, made visible in SC-003 and FR-099 rather than absorbed silently.
+- Fine-tuning is a one-off cost incurred outside the running system, as is the baseline benchmark spend. Neither is part of the recurring ceiling in SC-014.
+- The division of labour between fine-tuning and retrieval remains a planning decision. What is fixed is the outcome: the fine-tuned model produces the classification (FR-084), and GraphRAG over Neo4j supplies the grounding and the attributions.
 
 ---
 
@@ -412,3 +473,13 @@ governance, and `/speckit-plan` can be checked against it directly.
 - **Principle VI** was retargeted from per-user vector stores to the shared graph, and now requires a multilingual embedding model.
 - **Principle VII (Training Data Integrity)** was added to govern the capture loop, including the requirement that rows marked clinically incorrect are excluded from training.
 - A **Regulatory Posture** section was added, carrying `TODO(INTENDED_USE)` — research and thesis evaluation versus supply for use on real patients. That decision remains open and is the one governance item still outstanding.
+
+**New divergences opened by the clarifications of 2026-08-06 (second session).** These arrived after
+v2.0.0 was ratified and are not yet reflected in it. They are small in wording but two of them
+change a stated MUST, so `/speckit-constitution` should run again before `/speckit-plan`.
+
+- **Principle I** states "Registration MUST require a valid Administrator invitation". Registration is now request-then-approve (FR-004, FR-005, FR-085, FR-086): the Administrator authorises a submitted request rather than issuing a prior invitation. The guarantee is unchanged — no account exists without an explicit Administrator decision — but the mechanism named in the principle no longer exists. A MINOR amendment restating the mechanism, and adding the rate limit on the now-public request form, is required.
+- **Principle VII (Training Data Integrity)** governs captured rows but says nothing about how the fine-tuning corpus is divided. With the corpus at 18 distinct input tuples, the guarantee that matters most is that the test portion never reaches training (FR-101 through FR-104) — without it the project's primary safety test measures recall of training data and nothing else. A MINOR amendment should add the held-out split, and should also cover machine-generated examples for the day FR-088 is taken up: never cited as clinical precedent, never in the graph, never in an evaluation set, never labelled from the fictitious example configuration.
+- **The clinical regression gate in Development Workflow & Quality Gates** requires replaying the full historical dataset before merge. That remains correct, but it should now name the second measurement alongside it: the held-out 30% (SC-023) is what shows the model handles a case it has not seen, and a green replay on its own no longer carries that meaning.
+- **Technology & Operational Constraints** names "a fine-tuned Llama-family model served over an HTTP API". That is now specific: Llama 3.2 1B Instruct, private Hugging Face repository, scale-to-zero Inference Endpoint, with an escalation path to 3B and 8B if the replay gate fails (FR-084, FR-097, FR-098). A PATCH-level update keeps the document accurate.
+- **Principle V (Simplicity)** should record that the `rules/` engine is used as an offline labelling oracle and is **not** deployed. Without that note, its presence in the tree reads as a second classifier in production, which FR-084 forbids.
