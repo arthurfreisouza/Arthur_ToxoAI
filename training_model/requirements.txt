@@ -1,0 +1,17 @@
+# Local fine-tuning only, on the owner's laptop GPU (FR-105–FR-107). Never installed on the
+# production host — none of these packages may appear in Toxo_AI_code/requirements.txt.
+#
+# torch is deliberately not pinned to a CUDA build here: install the wheel matching the local
+# CUDA/driver from https://pytorch.org/get-started/locally/ BEFORE this file, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# The rest of the stack is pinned to a combination known to work together (SFTTrainer's API has
+# moved across trl releases), for the same reproducibility reason eval/split.v1.json is pinned.
+torch>=2.3
+transformers==4.44.2
+peft==0.12.0
+trl==0.9.6
+datasets==2.20.0
+accelerate==0.33.0
+huggingface_hub>=0.24
+jupyter>=1.0
+ipywidgets>=8.1

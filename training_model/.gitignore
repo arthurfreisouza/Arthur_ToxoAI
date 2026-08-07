@@ -1,0 +1,10 @@
+# Only the notebook is committed (FR-106). The saved model derives from clinical training
+# data and must never be committed — it reaches production solely through the private
+# Hugging Face repository.
+llama32-1b-toxo/
+checkpoints/
+runs/
+.ipynb_checkpoints/
+*.safetensors
+*.bin
+*.pt

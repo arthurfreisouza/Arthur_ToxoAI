@@ -1,0 +1,7 @@
+# Offline evaluation harness only. Never installed on the production host (FR-094) —
+# this is what keeps GPT/Gemini credentials and clients out of Toxo_AI_code/requirements.txt.
+huggingface_hub>=0.24     # pushes/reads the private fine-tuned repo, calls the Inference Endpoint
+openai>=1.30              # legacy GPT baseline client (research.md R9)
+google-generativeai>=0.7  # legacy Gemini baseline client (research.md R9)
+python-dotenv>=1.0        # loads HF_API_TOKEN / endpoint config for the harness scripts
+pytest>=8.0               # eval/tests/test_split.py

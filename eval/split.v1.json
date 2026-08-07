@@ -1,0 +1,175 @@
+{
+  "version": "split.v1",
+  "generated_at": "2026-08-07",
+  "source": "logs/request-logs.csv",
+  "source_sha256": "2837257bfb1121689b083a16086fc9d57e34f9cdd80a870610ef34ebddf4170d",
+  "rule": "per final_situation class, sort distinct input tuples by sha256 of joined finding values; take the first k as test; k allocated by largest remainder to a 30% overall target; single-tuple classes ineligible",
+  "input_fields": [
+    "fundoscopic",
+    "neuroimaging",
+    "pcr_la",
+    "first_igm",
+    "first_igg",
+    "first_avidity",
+    "first_weeks",
+    "last_igm",
+    "last_igg",
+    "post_igm",
+    "post_igg",
+    "child_igm",
+    "child_iga",
+    "child_igg"
+  ],
+  "totals": {
+    "distinct_tuples": 18,
+    "train_tuples": 13,
+    "test_tuples": 5,
+    "train_rows": 19,
+    "test_rows": 5,
+    "test_fraction": 0.278
+  },
+  "test": [
+    {
+      "tuple_sha256": "62bdcbb967e6b53761f0cec114afa64fb216b4162b28ea95acff3e6e9b14c9c7",
+      "record_ids": [
+        "17"
+      ],
+      "final_situation": "0"
+    },
+    {
+      "tuple_sha256": "7cdd5e478adaae3bd8f5e5a5e8feaef96dfc8779e7099df5237bcaf3618bb414",
+      "record_ids": [
+        "5"
+      ],
+      "final_situation": "0"
+    },
+    {
+      "tuple_sha256": "018e3d8f67ced7e3a58a9033fbe0e81d6e7903428fdf2e7efe8210f2c2a2aea2",
+      "record_ids": [
+        "13"
+      ],
+      "final_situation": "13"
+    },
+    {
+      "tuple_sha256": "43dd784c7ed55e9d5121a8a088b5faa8318733d94166aace169024e7b2862c19",
+      "record_ids": [
+        "21"
+      ],
+      "final_situation": "13"
+    },
+    {
+      "tuple_sha256": "04f97e6f149d35e60990035dccb014986933cb4171c56af1eda48b882a3c8a0a",
+      "record_ids": [
+        "24"
+      ],
+      "final_situation": "15"
+    }
+  ],
+  "train": [
+    {
+      "tuple_sha256": "e37d2aed6f647688d102a2ede5a69397b2d83b7f07e836ecb8126eb26418499b",
+      "record_ids": [
+        "6"
+      ],
+      "final_situation": "0"
+    },
+    {
+      "tuple_sha256": "e3ae76184007c659b073f12173b0244fc4142ae37f50dc1e115ab0a7d456533a",
+      "record_ids": [
+        "9",
+        "10",
+        "11",
+        "12"
+      ],
+      "final_situation": "0"
+    },
+    {
+      "tuple_sha256": "4aab37deff36d722570d9f6e19373b45b67296b3f3cd666c5cd66bc37503171b",
+      "record_ids": [
+        "2"
+      ],
+      "final_situation": "1"
+    },
+    {
+      "tuple_sha256": "6917cba23c07d458b0ed24d530c2282b08daa1e8ff72081a1c56939f09c372e7",
+      "record_ids": [
+        "1",
+        "3"
+      ],
+      "final_situation": "3"
+    },
+    {
+      "tuple_sha256": "5bc05e91d3b4a79c378402cafe2011f415d82821046e265e0cb0b74424d51835",
+      "record_ids": [
+        "4"
+      ],
+      "final_situation": "7"
+    },
+    {
+      "tuple_sha256": "b3d8622c050c6e2ca144ab7e192c13e945deb9c6861d0b2bccdbff1752050923",
+      "record_ids": [
+        "8"
+      ],
+      "final_situation": "13"
+    },
+    {
+      "tuple_sha256": "cd2f080b8daf4681e3117ec3d4c85565f6d3b0fac2288918f021445c0281e45b",
+      "record_ids": [
+        "14"
+      ],
+      "final_situation": "13"
+    },
+    {
+      "tuple_sha256": "d46a551c7033f59db25142faf40b7a3ff1570b561bf01b08e81db7a0dedd9e8a",
+      "record_ids": [
+        "7"
+      ],
+      "final_situation": "13"
+    },
+    {
+      "tuple_sha256": "758328cbf1c6df795acd4ea6879b2a74019e9d52301e0e27e5e66c2ba49dc288",
+      "record_ids": [
+        "19",
+        "20"
+      ],
+      "final_situation": "15"
+    },
+    {
+      "tuple_sha256": "c06510d1b015ca75884e37a7ae10da010bcdc0489e954ec61e3d354b5de2a28b",
+      "record_ids": [
+        "16"
+      ],
+      "final_situation": "15"
+    },
+    {
+      "tuple_sha256": "c9700b8847d67614373c9b55a8be48ce5c37841731b71a44cf6a839eb0e9ebe1",
+      "record_ids": [
+        "15"
+      ],
+      "final_situation": "16"
+    },
+    {
+      "tuple_sha256": "64a598c65694335054e402b7d8c884639d3e695784a702c8a0c149683ff00bdc",
+      "record_ids": [
+        "22",
+        "23"
+      ],
+      "final_situation": "18"
+    },
+    {
+      "tuple_sha256": "b84fbe400c7efc3288ba0af0a78761fe9189db658fa08c38b72e1293633cbe5e",
+      "record_ids": [
+        "18"
+      ],
+      "final_situation": "20"
+    }
+  ],
+  "unmeasured_classes": [
+    "1",
+    "3",
+    "7",
+    "16",
+    "18",
+    "20"
+  ]
+}
